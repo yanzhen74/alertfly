@@ -1,0 +1,39 @@
+# AlertFly 配置文件示例
+# 复制此文件为 config.yaml 并根据实际环境修改
+
+# 消费者类型：redis 或 kafka
+consumer:
+  type: "redis"
+
+# Redis 配置
+redis:
+  addr: "localhost:6379"        # Redis 服务地址
+  password: ""                  # Redis 密码，无密码留空
+  db: 0                         # Redis 数据库编号
+  channel: "alerts"             # Pub/Sub 模式的 channel 名称
+  stream: "alert_stream"        # Stream 模式的 stream 名称
+  consumer_group: "alertfly_group" # Stream 模式的 Consumer Group 名称
+  mode: "pubsub"                # 消费模式：pubsub（Pub/Sub）或 stream（Stream）
+
+# Kafka 配置
+kafka:
+  brokers:                      # Kafka broker 地址列表
+    - "localhost:9092"
+  topic: "alerts"               # Kafka topic 名称
+  group_id: "alertfly_group"    # Kafka Consumer Group ID
+
+# 本地存储配置
+storage:
+  db_path: "./alertfly.db"      # SQLite 数据库文件路径
+  retention_days: 7             # 消息保留天数，超过后自动清理
+  max_records: 10000            # 最大保留记录数，超过后自动清理
+
+# 桌面通知配置
+notifier:
+  enabled: true                 # 是否启用桌面弹窗通知
+
+# 自动更新检查配置
+updater:
+  enabled: false                # 是否启用自动更新检查
+  check_url: ""                 # 检查新版本信息的 URL
+  interval: "24h"               # 检查间隔，Go duration 格式（如 1h, 24h, 30m）

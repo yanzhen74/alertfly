@@ -1,0 +1,23 @@
+# Binaries
+alertfly
+alertfly.exe
+*.old
+
+# IDE
+.idea/
+.vscode/
+
+# Go module cache
+.gomodcache/
+.gopath/
+.gocache/
+vendor/
+
+# Go build cache & toolchain
+.go-cache/
+.go-mod-cache/
+.go/
+
+# Temp
+*.tmp
+*.download
