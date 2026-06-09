@@ -146,6 +146,7 @@ func (a *AsyncNotifier) processLoop(appCtx context.Context) {
 				if err := a.inner.Notify(summary); err != nil {
 					log.Printf("[notifier] 发送摘要通知失败: %v", err)
 				}
+				// 气泡通知走 trayNotify 回调（Windows Balloon Tip / Linux notify-send）
 				if a.trayNotify != nil {
 					a.trayNotify(summary.Title, summary.Content)
 				}
@@ -156,6 +157,7 @@ func (a *AsyncNotifier) processLoop(appCtx context.Context) {
 				if err := a.inner.Notify(msg); err != nil {
 					log.Printf("[notifier] 发送通知失败: %v", err)
 				}
+				// 气泡通知走 trayNotify 回调
 				if a.trayNotify != nil {
 					a.trayNotify(msg.Title, msg.Content)
 				}

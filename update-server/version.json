@@ -1,7 +1,7 @@
 {
   "version": "0.2.2",
   "linux_url": "http://localhost:8000/alertfly",
-  "linux_sha256": "3053dffb880ffa65473120993f952325cadde979801b1248ec5030cb3cd53601",
+  "linux_sha256": "bf4b075851c539552fbe50d3141cd04213ef1e9f12f55613162ee6029ea5e33d",
   "windows_url": "http://localhost:8000/alertfly.exe",
-  "windows_sha256": "8936c36ace344397d1296a20f5c586001f530cd580cb61ecd448217a61aee11a"
+  "windows_sha256": "8776999b9aa2293d5d9286c8a869eab9f0aa0972727dc967283265ab72db98cf"
 }

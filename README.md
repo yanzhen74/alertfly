@@ -9,7 +9,7 @@
 - SQLite 本地持久化，支持分页过滤查询
 - 跨平台桌面弹窗通知（不抢夺焦点）
   - Linux：notify-send
-  - Windows：Shell_NotifyIconW Balloon Tip（兼容 Win7）
+  - Windows：Shell_NotifyIconW Balloon Tip（Win10/11 自动转 Toast 样式，`-tags win7` 编译 Win7 版本）
 - 异步通知 + 限流合并（密集告警自动合并摘要）
 - 连接异常弹窗警告（消费者断连自动提醒）
 - 软件自更新（HTTP 轮询 + SHA256 校验 + 静默替换）
@@ -156,7 +156,7 @@ updater:
 
 - Go 1.17+（编译）
 - Linux：需安装 `libnotify-bin`（notify-send）
-- Windows：原生 Toast 通知，无额外依赖
+- Windows：Balloon Tip 通知，无额外依赖（Win10+ 自动转 Toast 样式）
 
 ## 项目结构
 
@@ -184,6 +184,16 @@ alertfly/
 ├── go.mod
 └── go.sum
 ```
+
+## 更新日志
+
+### v0.2.3
+
+- **Bug 修复**：修复 Windows 通知不弹出的严重 bug（vendor/systray `notifyIconData` 结构体 union 字段对齐错误，导致所有后续字段偏移+4字节）
+- **改进**：Windows 通知现支持全版本（Win7 Balloon Tip / Win10+11 自动转 Toast 样式）
+- **改进**：分版本 build tag，默认编译 Win10/11，`-tags win7` 编译 Win7 版本
+- **改进**：移除 go-toast/toast 依赖（消除 PowerShell 3-6秒启动延迟）
+- **改进**：异步通知限流间隔优化为 200ms
 
 ## License
 

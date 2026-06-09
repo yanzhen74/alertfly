@@ -5,38 +5,9 @@ package tray
 import (
 	"log"
 	"os/exec"
-	"unsafe"
 
 	"github.com/getlantern/systray"
-	"golang.org/x/sys/windows"
 )
-
-var (
-	shell32           = windows.NewLazySystemDLL("Shell32.dll")
-	pShellNotifyIconW = shell32.NewProc("Shell_NotifyIconW")
-
-	user32       = windows.NewLazySystemDLL("User32.dll")
-	pFindWindowW = user32.NewProc("FindWindowW")
-)
-
-// notifyIconData 用于 Shell_NotifyIconW 的气泡通知结构体
-// https://learn.microsoft.com/en-us/windows/win32/api/shellapi/ns-shellapi-notifyicondataw
-type notifyIconData struct {
-	Size                       uint32
-	Wnd                        windows.Handle
-	ID                         uint32
-	Flags                      uint32
-	CallbackMessage            uint32
-	Icon                       windows.Handle
-	Tip                        [128]uint16
-	State, StateMask           uint32
-	Info                       [256]uint16
-	Timeout, Version           uint32
-	InfoTitle                  [64]uint16
-	InfoFlags                  uint32
-	GuidItem                   windows.GUID
-	BalloonIcon                windows.Handle
-}
 
 // TrayApp 系统托盘应用
 type TrayApp struct {
@@ -58,55 +29,14 @@ func (t *TrayApp) Start() {
 }
 
 // ShowNotification 通过 Balloon Tip 发送 Windows 气泡通知（Win7+ 兼容，可从任意 goroutine 调用）
+// 委托给 systray.ShowNotification，后者直接使用内部 wt.nid 的窗口句柄，
+// 无需 FindWindowW，避免窗口查找失败的问题。
 func (t *TrayApp) ShowNotification(title, message string) {
 	title = truncate(title, 48)   // szInfoTitle 最多 48 字符（不含 null）
 	message = truncate(message, 200)
 
-	const (
-		NIM_MODIFY = 0x00000001
-		NIF_INFO   = 0x00000010
-		NIIF_INFO  = 0x00000001 // 信息图标
-	)
-
-	// 查找 systray 创建的隐藏窗口，窗口类名为 "SystrayClass"
-	classNamePtr, err := windows.UTF16PtrFromString("SystrayClass")
-	if err != nil {
-		log.Printf("[tray] ShowNotification UTF16 转换失败: %v", err)
-		return
-	}
-	hwnd, _, _ := pFindWindowW.Call(uintptr(unsafe.Pointer(classNamePtr)), 0)
-	if hwnd == 0 {
-		log.Printf("[tray] ShowNotification 找不到 systray 窗口，跳过气泡通知")
-		return
-	}
-
-	titleUTF16, err := windows.UTF16FromString(title)
-	if err != nil {
-		log.Printf("[tray] ShowNotification 标题转换失败: %v", err)
-		return
-	}
-	infoUTF16, err := windows.UTF16FromString(message)
-	if err != nil {
-		log.Printf("[tray] ShowNotification 消息转换失败: %v", err)
-		return
-	}
-
-	nid := notifyIconData{
-		Wnd:       windows.Handle(hwnd),
-		ID:        100, // systray 内部使用的 NotifyIcon ID
-		Flags:     NIF_INFO,
-		InfoFlags: NIIF_INFO,
-	}
-	nid.Size = uint32(unsafe.Sizeof(nid))
-	copy(nid.InfoTitle[:], titleUTF16)
-	copy(nid.Info[:], infoUTF16)
-
-	res, _, err := pShellNotifyIconW.Call(
-		uintptr(NIM_MODIFY),
-		uintptr(unsafe.Pointer(&nid)),
-	)
-	if res == 0 {
-		log.Printf("[tray] ShowNotification Shell_NotifyIconW 失败: %v", err)
+	if err := systray.ShowNotification(title, message); err != nil {
+		log.Printf("[tray] ShowNotification 失败: %v", err)
 	}
 }
 
