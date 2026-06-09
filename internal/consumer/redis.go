@@ -62,11 +62,6 @@ func (c *RedisConsumer) Errors() <-chan error {
 
 // Start 启动消费者
 func (c *RedisConsumer) Start(ctx context.Context) error {
-	// 先测试连接
-	if err := c.client.Ping(ctx).Err(); err != nil {
-		return fmt.Errorf("redis connection failed: %w", err)
-	}
-
 	childCtx, cancel := context.WithCancel(ctx)
 	c.mu.Lock()
 	c.cancel = cancel
