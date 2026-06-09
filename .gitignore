@@ -1,7 +1,11 @@
 # Binaries
 /alertfly
 alertfly.exe
+*.exe
 *.old
+
+# Build output
+/build/
 
 # IDE
 .idea/
