@@ -167,8 +167,24 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 	}
 	// 注册立即检查更新回调
 	ws.SetCheckUpdateHandler(func() error {
+		// 如果 updater 未初始化（启动时无 check_url），尝试用当前配置动态创建
 		if ud == nil {
-			return fmt.Errorf("自更新未配置，请先设置检查地址")
+			if cfg.Updater.CheckURL == "" {
+				return fmt.Errorf("自更新未配置，请先设置检查地址并重启程序")
+			}
+			udCfg := updater.Config{
+				Enabled:  true,
+				CheckURL: cfg.Updater.CheckURL,
+				Interval: cfg.Updater.Interval,
+			}
+			if udCfg.Interval == 0 {
+				udCfg.Interval = 24 * time.Hour
+			}
+			ud = updater.NewUpdater(udCfg, version, func(title string, body string) {
+				log.Printf("[updater] %s: %s", title, body)
+			})
+			ud.Start(ctx)
+			log.Println("[main] Updater 动态初始化完成")
 		}
 		return ud.CheckAndUpdate()
 	})
