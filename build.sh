@@ -38,6 +38,11 @@ pack() {
     echo ">>> Linux SHA256: ${LINUX_SHA}"
     echo ">>> Windows SHA256: ${WIN_SHA}"
 
+    # 同步到本地 update-server 目录（方便本地启动更新服务测试）
+    cp ${BUILD_DIR}/alertfly-linux-amd64 update-server/alertfly
+    cp ${BUILD_DIR}/alertfly-windows-amd64.exe update-server/alertfly.exe
+    echo ">>> 已同步二进制到本地 update-server/"
+
     # Linux 包
     LINUX_DIR="${BUILD_DIR}/alertfly-${VERSION_TAG}-linux-amd64"
     mkdir -p "${LINUX_DIR}/update-server"
