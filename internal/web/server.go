@@ -16,15 +16,23 @@ import (
 	"github.com/oliverxu/alertfly/internal/storage"
 )
 
+// UpdateCheckResult 更新检查结果
+type UpdateCheckResult struct {
+	HasUpdate  bool   // 是否发现新版本
+	NewVersion string // 新版本号
+	Updated    bool   // 更新是否已应用成功
+	ErrMsg     string // 错误信息
+}
+
 // WebServer HTTP Web 服务器，提供前端页面和 REST API
 type WebServer struct {
-	port       int
-	configPath string
-	storage    storage.Storage
-	config     *config.Config
-	engine     *gin.Engine
-	server     *http.Server
-	onCheckUpdate func() error // 立即检查更新回调
+	port          int
+	configPath    string
+	storage       storage.Storage
+	config        *config.Config
+	engine        *gin.Engine
+	server        *http.Server
+	onCheckUpdate func() *UpdateCheckResult // 立即检查更新回调
 }
 
 // NewWebServer 创建 Web 服务器实例
@@ -131,7 +139,7 @@ func (s *WebServer) Start() error {
 }
 
 // SetCheckUpdateHandler 设置立即检查更新的回调函数
-func (s *WebServer) SetCheckUpdateHandler(fn func() error) {
+func (s *WebServer) SetCheckUpdateHandler(fn func() *UpdateCheckResult) {
 	s.onCheckUpdate = fn
 }
 
@@ -141,8 +149,21 @@ func (s *WebServer) handleCheckUpdate(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "更新功能未初始化"})
 		return
 	}
-	if err := s.onCheckUpdate(); err != nil {
-		c.JSON(http.StatusOK, gin.H{"code": 1, "msg": err.Error()})
+	result := s.onCheckUpdate()
+	if result == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "更新检查异常"})
+		return
+	}
+	if result.ErrMsg != "" {
+		if result.HasUpdate {
+			c.JSON(http.StatusOK, gin.H{"code": 1, "msg": fmt.Sprintf("版本更新失败: %s", result.ErrMsg)})
+		} else {
+			c.JSON(http.StatusOK, gin.H{"code": 1, "msg": fmt.Sprintf("版本检查失败: %s", result.ErrMsg)})
+		}
+		return
+	}
+	if result.Updated {
+		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": fmt.Sprintf("版本更新成功 v%s，将在重启后生效", result.NewVersion)})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "已是最新版本，无需更新"})

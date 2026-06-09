@@ -1,0 +1,17 @@
+# AlertFly 手动报警脚本配置文件
+# 复制此文件为 send_alert.user 并根据实际环境修改
+#   cp send_alert.user.example send_alert.user
+
+# Redis 连接配置
+REDIS_ADDR=localhost:6379
+REDIS_PASSWORD=
+REDIS_DB=0
+
+# 消息配置
+CHANNEL=alerts
+MODE=pubsub
+LEVEL=warn
+SUBTYPE=manual
+SENDER=oliver
+MISSION=
+SOURCE=redis

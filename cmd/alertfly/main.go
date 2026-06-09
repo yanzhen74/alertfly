@@ -142,6 +142,45 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 	defer store.Close()
 	log.Println("[main] SQLite 存储初始化成功")
 
+	// --- 创建更新事件记录回调 ---
+	recordUpdateEvent := func(event updater.Event) {
+		msg := &model.Message{
+			Source:     "system",
+			Topic:      "update",
+			Level:      "info",
+			SubType:    "update",
+			Sender:     "system",
+			ReceivedAt: time.Now(),
+		}
+
+		switch event.Kind {
+		case updater.EventFoundNewVersion:
+			msg.Level = "info"
+			msg.Title = fmt.Sprintf("发现新版本 %s", event.Version)
+			msg.Content = fmt.Sprintf("新版本: %s, 下载地址: %s", event.Version, event.URL)
+		case updater.EventAlreadyLatest:
+			// "已是最新版本" 不记录到数据库，避免定时检查产生大量无意义记录
+			log.Printf("[updater] 版本检查完成，已是最新版本")
+			return
+		case updater.EventCheckFailed:
+			msg.Level = "warn"
+			msg.Title = "版本检查失败"
+			msg.Content = event.Err.Error()
+		case updater.EventUpdateSuccess:
+			msg.Level = "info"
+			msg.Title = "版本更新成功，将在重启后生效"
+			msg.Content = fmt.Sprintf("新版本: %s", event.Version)
+		case updater.EventUpdateFailed:
+			msg.Level = "error"
+			msg.Title = "版本更新失败"
+			msg.Content = event.Err.Error()
+		}
+
+		if saveErr := store.Save(msg); saveErr != nil {
+			log.Printf("[main] 保存更新事件失败: %v", saveErr)
+		}
+	}
+
 	// --- 初始化 Web 服务器 ---
 	ws := web.NewWebServer(cfg.Web.Port, *configPath, store, cfg)
 	if err := ws.Start(); err != nil {
@@ -161,16 +200,16 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 		}
 		ud = updater.NewUpdater(udCfg, version, func(title string, body string) {
 			log.Printf("[updater] %s: %s", title, body)
-		})
+		}, recordUpdateEvent)
 		ud.Start(ctx)
 		log.Println("[main] Updater 已启动")
 	}
 	// 注册立即检查更新回调
-	ws.SetCheckUpdateHandler(func() error {
+	ws.SetCheckUpdateHandler(func() *web.UpdateCheckResult {
 		// 如果 updater 未初始化（启动时无 check_url），尝试用当前配置动态创建
 		if ud == nil {
 			if cfg.Updater.CheckURL == "" {
-				return fmt.Errorf("自更新未配置，请先设置检查地址并重启程序")
+				return &web.UpdateCheckResult{ErrMsg: "自更新未配置，请先设置检查地址并重启程序"}
 			}
 			udCfg := updater.Config{
 				Enabled:  true,
@@ -182,11 +221,21 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 			}
 			ud = updater.NewUpdater(udCfg, version, func(title string, body string) {
 				log.Printf("[updater] %s: %s", title, body)
-			})
+			}, recordUpdateEvent)
 			ud.Start(ctx)
 			log.Println("[main] Updater 动态初始化完成")
 		}
-		return ud.CheckAndUpdate()
+		result := ud.CheckAndUpdate()
+		errMsg := ""
+		if result.Err != nil {
+			errMsg = result.Err.Error()
+		}
+		return &web.UpdateCheckResult{
+			HasUpdate:  result.HasUpdate,
+			NewVersion: result.NewVersion,
+			Updated:    result.Updated,
+			ErrMsg:     errMsg,
+		}
 	})
 
 	// --- 初始化 Proxy ---
@@ -204,6 +253,12 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 		nt = &logNotifier{}
 		log.Println("[main] Notifier 已禁用，使用日志替代")
 	}
+
+	// --- 初始化异步通知包装器 ---
+	asyncNt := notifier.NewAsyncNotifier(nt, trayApp.ShowNotification)
+	asyncNt.Start(ctx)
+	nt = asyncNt // 后续所有 nt 调用自动走异步限流
+	log.Println("[main] AsyncNotifier 已启动（限流: 1s 间隔，合并: >3 条摘要）")
 
 	// --- 初始化并启动 Consumer（带重试） ---
 	// 支持同时启用 Redis 和 Kafka 两个消费者
@@ -351,13 +406,10 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 				log.Printf("[main] 存储消息失败: %v", err)
 			}
 
-			// 通过 Notifier 弹窗通知
+			// 通过异步通知器弹窗通知（含系统托盘通知，限流合并）
 			if err := nt.Notify(msg); err != nil {
 				log.Printf("[main] 发送通知失败: %v", err)
 			}
-
-			// 通过系统托盘通知（Windows 显示 Toast，Linux 通过 notify-send）
-			trayApp.ShowNotification(msg.Title, msg.Content)
 
 			// stdout 模式输出
 			if *stdout {
@@ -396,6 +448,8 @@ shutdown:
 			log.Printf("[main] 关闭 %s 消费者失败: %v", ce.name, err)
 		}
 	}
+	log.Println("[main] 正在关闭异步通知...")
+	asyncNt.Close()
 	log.Println("[main] 正在关闭存储...")
 	if err := store.Close(); err != nil {
 		log.Printf("[main] 关闭存储失败: %v", err)

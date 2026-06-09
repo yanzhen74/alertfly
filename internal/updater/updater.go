@@ -39,20 +39,52 @@ type Config struct {
 // ErrorNotifier 错误通知回调（用于弹窗警告）
 type ErrorNotifier func(title string, body string)
 
+// EventKind 更新事件类型
+type EventKind int
+
+const (
+	EventFoundNewVersion EventKind = iota // 发现新版本
+	EventAlreadyLatest                    // 已是最新版本
+	EventCheckFailed                      // 版本检查失败
+	EventUpdateSuccess                    // 版本更新成功
+	EventUpdateFailed                     // 版本更新失败
+)
+
+// Event 更新事件
+type Event struct {
+	Kind    EventKind // 事件类型
+	Version string    // 新版本号（发现新版本/更新成功时有值）
+	URL     string    // 下载地址（发现新版本时有值）
+	Err     error     // 错误信息（检查失败/更新失败时有值）
+}
+
+// EventRecorder 更新事件记录回调
+type EventRecorder func(event Event)
+
+// CheckResult 检查更新结果
+type CheckResult struct {
+	HasUpdate  bool   // 是否发现新版本
+	NewVersion string // 新版本号
+	Updated    bool   // 更新是否已应用成功
+	Err        error  // 错误信息
+}
+
 // Updater 自更新管理器
 type Updater struct {
 	cfg            Config
 	currentVersion string
 	notifyError    ErrorNotifier
+	recordEvent    EventRecorder
 	client         *http.Client
 }
 
 // NewUpdater 创建更新器
-func NewUpdater(cfg Config, currentVersion string, notifyError ErrorNotifier) *Updater {
+func NewUpdater(cfg Config, currentVersion string, notifyError ErrorNotifier, recordEvent EventRecorder) *Updater {
 	return &Updater{
 		cfg:            cfg,
 		currentVersion: currentVersion,
 		notifyError:    notifyError,
+		recordEvent:    recordEvent,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -70,8 +102,9 @@ func (u *Updater) Start(ctx context.Context) {
 
 	go func() {
 		// 启动时立即检查一次
-		if err := u.CheckAndUpdate(); err != nil {
-			log.Printf("[updater] 启动时检查更新失败: %v", err)
+		result := u.CheckAndUpdate()
+		if result.Err != nil {
+			log.Printf("[updater] 启动时检查更新失败: %v", result.Err)
 		}
 
 		ticker := time.NewTicker(u.cfg.Interval)
@@ -83,8 +116,9 @@ func (u *Updater) Start(ctx context.Context) {
 				log.Printf("[updater] 收到取消信号，停止定时检查")
 				return
 			case <-ticker.C:
-				if err := u.CheckAndUpdate(); err != nil {
-					log.Printf("[updater] 定时检查更新失败: %v", err)
+				result := u.CheckAndUpdate()
+				if result.Err != nil {
+					log.Printf("[updater] 定时检查更新失败: %v", result.Err)
 				}
 			}
 		}
@@ -92,14 +126,17 @@ func (u *Updater) Start(ctx context.Context) {
 }
 
 // CheckAndUpdate 立即检查并执行更新
-func (u *Updater) CheckAndUpdate() error {
+func (u *Updater) CheckAndUpdate() *CheckResult {
 	log.Printf("[updater] 开始检查更新...")
 
 	// 1. 获取远程版本信息
 	info, err := u.fetchVersionInfo()
 	if err != nil {
 		u.notifyError("更新检查失败", fmt.Sprintf("无法获取远程版本信息: %v", err))
-		return fmt.Errorf("fetch version info: %w", err)
+		if u.recordEvent != nil {
+			u.recordEvent(Event{Kind: EventCheckFailed, Err: err})
+		}
+		return &CheckResult{Err: err}
 	}
 
 	log.Printf("[updater] 远程版本: %s, 当前版本: %s", info.Version, u.currentVersion)
@@ -107,38 +144,58 @@ func (u *Updater) CheckAndUpdate() error {
 	// 2. 比较版本
 	if !needsUpdate(u.currentVersion, info.Version) {
 		log.Printf("[updater] 当前版本已是最新，无需更新")
-		return nil
+		if u.recordEvent != nil {
+			u.recordEvent(Event{Kind: EventAlreadyLatest})
+		}
+		return &CheckResult{}
 	}
 
 	log.Printf("[updater] 发现新版本 %s，开始更新...", info.Version)
+
+	if u.recordEvent != nil {
+		u.recordEvent(Event{Kind: EventFoundNewVersion, Version: info.Version, URL: info.URL})
+	}
 
 	// 3. 下载新版本到临时文件
 	tmpPath, err := u.download(info)
 	if err != nil {
 		u.notifyError("更新下载失败", fmt.Sprintf("下载新版本 %s 失败: %v", info.Version, err))
-		return fmt.Errorf("download: %w", err)
+		if u.recordEvent != nil {
+			u.recordEvent(Event{Kind: EventUpdateFailed, Version: info.Version, Err: err})
+		}
+		return &CheckResult{HasUpdate: true, NewVersion: info.Version, Err: err}
 	}
 
 	// 4. SHA256 校验
 	if err := u.verifySHA256(tmpPath, info.SHA256); err != nil {
 		u.notifyError("更新校验失败", fmt.Sprintf("SHA256 校验失败: %v", err))
 		u.cleanupTmp(tmpPath)
-		return fmt.Errorf("verify sha256: %w", err)
+		if u.recordEvent != nil {
+			u.recordEvent(Event{Kind: EventUpdateFailed, Version: info.Version, Err: err})
+		}
+		return &CheckResult{HasUpdate: true, NewVersion: info.Version, Err: err}
 	}
 
 	// 5. 替换当前可执行文件
 	if err := u.replace(tmpPath); err != nil {
 		u.notifyError("更新替换失败", fmt.Sprintf("替换可执行文件失败: %v", err))
 		u.cleanupTmp(tmpPath)
-		return fmt.Errorf("replace: %w", err)
+		if u.recordEvent != nil {
+			u.recordEvent(Event{Kind: EventUpdateFailed, Version: info.Version, Err: err})
+		}
+		return &CheckResult{HasUpdate: true, NewVersion: info.Version, Err: err}
 	}
 
 	log.Printf("[updater] 更新完成，即将重启至版本 %s", info.Version)
 
+	if u.recordEvent != nil {
+		u.recordEvent(Event{Kind: EventUpdateSuccess, Version: info.Version})
+	}
+
 	// 6. 重启
 	u.restart()
 
-	return nil
+	return &CheckResult{HasUpdate: true, NewVersion: info.Version, Updated: true}
 }
 
 // fetchVersionInfo 从远程 URL 获取版本信息

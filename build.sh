@@ -1,16 +1,42 @@
 #!/bin/bash
 # AlertFly 编译脚本
-# 用法: ./build.sh [linux|windows|all]
+# 用法: ./build.sh [linux|windows|pack|all] [版本号]
+#
+# 使用 git tag 版本（默认）
+#   ./build.sh all
+#   ./build.sh linux
+#
+# 手动指定版本号
+#   ./build.sh all 0.3.0
+#   ./build.sh linux 0.3.0
 
 set -e
 
 export PATH=$PATH:/usr/local/go/bin
-VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+
+# 第二个参数为版本号（可选）
+if [ -n "$2" ]; then
+    VERSION="$2"
+else
+    VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+fi
+# 去掉 v 前缀用于 version.json
+VERSION_CLEAN=$(echo "${VERSION}" | sed 's/^[vV]//')
+
 BUILD_TIME=$(date '+%Y-%m-%d %H:%M:%S')
 LDFLAGS="-X main.version=${VERSION} -X 'main.buildTime=${BUILD_TIME}'"
 
 BUILD_DIR="build"
+VERSION_JSON="update-server/version.json"
 mkdir -p ${BUILD_DIR}
+
+# 更新 version.json 中的指定字段
+# 用法: update_version_json <field> <value>
+update_version_json() {
+    local field="$1"
+    local value="$2"
+    sed -i "s/\"${field}\": *\"[^\"]*\"/\"${field}\": \"${value}\"/" "${VERSION_JSON}"
+}
 
 build_linux() {
     echo ">>> 编译 Linux amd64..."
@@ -28,11 +54,35 @@ build_windows() {
     echo ">>> 完成: ${BUILD_DIR}/alertfly-windows-amd64.exe"
 }
 
+# 更新 version.json：版本号和指定平台的 sha256
+# 用法: update_version_info [linux] [windows]
+update_version_info() {
+    # 更新 version 字段
+    update_version_json "version" "${VERSION_CLEAN}"
+    echo ">>> 已更新 ${VERSION_JSON}: version=${VERSION_CLEAN}"
+
+    for platform in "$@"; do
+        case "${platform}" in
+            linux)
+                cp ${BUILD_DIR}/alertfly-linux-amd64 update-server/alertfly
+                local linux_sha=$(sha256sum ${BUILD_DIR}/alertfly-linux-amd64 | awk '{print $1}')
+                update_version_json "linux_sha256" "${linux_sha}"
+                echo ">>> 已更新 ${VERSION_JSON}: linux_sha256=${linux_sha}"
+                ;;
+            windows)
+                cp ${BUILD_DIR}/alertfly-windows-amd64.exe update-server/alertfly.exe
+                local win_sha=$(sha256sum ${BUILD_DIR}/alertfly-windows-amd64.exe | awk '{print $1}')
+                update_version_json "windows_sha256" "${win_sha}"
+                echo ">>> 已更新 ${VERSION_JSON}: windows_sha256=${win_sha}"
+                ;;
+        esac
+    done
+}
+
 pack() {
     echo ">>> 打包发布..."
-    VERSION_TAG=$(git describe --tags --always 2>/dev/null || echo "dev")
 
-    # 计算 sha256 供参考（部署者需要根据实际 URL 修改 version.json）
+    # 计算 sha256 供参考
     LINUX_SHA=$(sha256sum ${BUILD_DIR}/alertfly-linux-amd64 | awk '{print $1}')
     WIN_SHA=$(sha256sum ${BUILD_DIR}/alertfly-windows-amd64.exe | awk '{print $1}')
     echo ">>> Linux SHA256: ${LINUX_SHA}"
@@ -44,7 +94,7 @@ pack() {
     echo ">>> 已同步二进制到本地 update-server/"
 
     # Linux 包
-    LINUX_DIR="${BUILD_DIR}/alertfly-${VERSION_TAG}-linux-amd64"
+    LINUX_DIR="${BUILD_DIR}/alertfly-${VERSION}-linux-amd64"
     mkdir -p "${LINUX_DIR}/update-server"
     cp ${BUILD_DIR}/alertfly-linux-amd64 "${LINUX_DIR}/alertfly"
     cp config.yaml.example "${LINUX_DIR}/"
@@ -52,14 +102,13 @@ pack() {
     cp update-server/start_server.py "${LINUX_DIR}/update-server/"
     cp update-server/version.json "${LINUX_DIR}/update-server/"
     cp update-server/README.md "${LINUX_DIR}/update-server/"
-    # update-server 中也放一份二进制供更新分发
     cp ${BUILD_DIR}/alertfly-linux-amd64 "${LINUX_DIR}/update-server/alertfly"
-    tar -czf "${BUILD_DIR}/alertfly-${VERSION_TAG}-linux-amd64.tar.gz" -C ${BUILD_DIR} "alertfly-${VERSION_TAG}-linux-amd64"
+    tar -czf "${BUILD_DIR}/alertfly-${VERSION}-linux-amd64.tar.gz" -C ${BUILD_DIR} "alertfly-${VERSION}-linux-amd64"
     rm -rf "${LINUX_DIR}"
-    echo ">>> 完成: ${BUILD_DIR}/alertfly-${VERSION_TAG}-linux-amd64.tar.gz"
+    echo ">>> 完成: ${BUILD_DIR}/alertfly-${VERSION}-linux-amd64.tar.gz"
 
     # Windows 包
-    WIN_DIR="${BUILD_DIR}/alertfly-${VERSION_TAG}-windows-amd64"
+    WIN_DIR="${BUILD_DIR}/alertfly-${VERSION}-windows-amd64"
     mkdir -p "${WIN_DIR}/update-server"
     cp ${BUILD_DIR}/alertfly-windows-amd64.exe "${WIN_DIR}/alertfly.exe"
     cp config.yaml.example "${WIN_DIR}/"
@@ -68,30 +117,34 @@ pack() {
     cp update-server/version.json "${WIN_DIR}/update-server/"
     cp update-server/README.md "${WIN_DIR}/update-server/"
     cp ${BUILD_DIR}/alertfly-windows-amd64.exe "${WIN_DIR}/update-server/alertfly.exe"
-    tar -czf "${BUILD_DIR}/alertfly-${VERSION_TAG}-windows-amd64.tar.gz" -C ${BUILD_DIR} "alertfly-${VERSION_TAG}-windows-amd64"
+    tar -czf "${BUILD_DIR}/alertfly-${VERSION}-windows-amd64.tar.gz" -C ${BUILD_DIR} "alertfly-${VERSION}-windows-amd64"
     rm -rf "${WIN_DIR}"
-    echo ">>> 完成: ${BUILD_DIR}/alertfly-${VERSION_TAG}-windows-amd64.tar.gz"
+    echo ">>> 完成: ${BUILD_DIR}/alertfly-${VERSION}-windows-amd64.tar.gz"
 }
 
 case "${1:-all}" in
     linux)
         build_linux
+        update_version_info linux
         ;;
     windows)
         build_windows
+        update_version_info windows
         ;;
     pack)
         build_linux
         build_windows
+        update_version_info linux windows
         pack
         ;;
     all)
         build_linux
         build_windows
+        update_version_info linux windows
         pack
         ;;
     *)
-        echo "用法: $0 [linux|windows|pack|all]"
+        echo "用法: $0 [linux|windows|pack|all] [版本号]"
         exit 1
         ;;
 esac

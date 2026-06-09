@@ -276,7 +276,7 @@
           notifier_enabled: (data.notifier && data.notifier.enabled) ? true : false,
           updater_enabled: (data.updater && data.updater.enabled) ? true : false,
           updater_check_url: (data.updater && data.updater.check_url) || '',
-          updater_interval: (data.updater && data.updater.interval != null) ? String(data.updater.interval) : ''
+          updater_interval: (data.updater && data.updater.interval != null) ? String(Math.round(data.updater.interval / 60000000000)) : ''
         });
 
         // 根据 enabled 状态切换配置区域显示
@@ -329,7 +329,7 @@
         updater: {
           enabled: data.updater_enabled === 'on',
           check_url: data.updater_check_url,
-          interval: parseInt(data.updater_interval) || 0
+          interval: (parseInt(data.updater_interval) || 0) * 60000000000
         }
       };
 
