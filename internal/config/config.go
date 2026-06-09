@@ -9,57 +9,57 @@ import (
 
 // Config 全局配置结构
 type Config struct {
-	Redis    RedisConfig    `yaml:"redis"`
-	Kafka    KafkaConfig    `yaml:"kafka"`
-	Storage  StorageConfig  `yaml:"storage"`
-	Notifier NotifierConfig `yaml:"notifier"`
-	Updater  UpdaterConfig  `yaml:"updater"`
-	Web      WebConfig      `yaml:"web"`
+	Redis    RedisConfig    `yaml:"redis" json:"redis"`
+	Kafka    KafkaConfig    `yaml:"kafka" json:"kafka"`
+	Storage  StorageConfig  `yaml:"storage" json:"storage"`
+	Notifier NotifierConfig `yaml:"notifier" json:"notifier"`
+	Updater  UpdaterConfig  `yaml:"updater" json:"updater"`
+	Web      WebConfig      `yaml:"web" json:"web"`
 }
 
 // WebConfig Web UI 配置
 type WebConfig struct {
-	Enabled bool `yaml:"enabled"` // 是否启用 Web UI
-	Port    int  `yaml:"port"`    // Web UI 端口
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	Port    int  `yaml:"port" json:"port"`
 }
 
 // RedisConfig Redis 连接配置
 type RedisConfig struct {
-	Enabled       bool   `yaml:"enabled"`        // 是否启用 Redis 消费者
-	Addr          string `yaml:"addr"`           // Redis 地址，如 localhost:6379
-	Password      string `yaml:"password"`       // Redis 密码
-	DB            int    `yaml:"db"`             // Redis 数据库编号
-	Channel       string `yaml:"channel"`        // Pub/Sub channel 名称
-	Stream        string `yaml:"stream"`         // Stream 名称
-	ConsumerGroup string `yaml:"consumer_group"` // Stream Consumer Group 名称
-	Mode          string `yaml:"mode"`           // pubsub 或 stream
+	Enabled       bool   `yaml:"enabled" json:"enabled"`
+	Addr          string `yaml:"addr" json:"addr"`
+	Password      string `yaml:"password" json:"password"`
+	DB            int    `yaml:"db" json:"db"`
+	Channel       string `yaml:"channel" json:"channel"`
+	Stream        string `yaml:"stream" json:"stream"`
+	ConsumerGroup string `yaml:"consumer_group" json:"consumer_group"`
+	Mode          string `yaml:"mode" json:"mode"`
 }
 
 // KafkaConfig Kafka 连接配置
 type KafkaConfig struct {
-	Enabled bool     `yaml:"enabled"`  // 是否启用 Kafka 消费者
-	Brokers []string `yaml:"brokers"`  // Kafka broker 地址列表
-	Topic   string   `yaml:"topic"`    // Kafka topic 名称
-	GroupID string   `yaml:"group_id"` // Kafka Consumer Group ID
+	Enabled bool     `yaml:"enabled" json:"enabled"`
+	Brokers []string `yaml:"brokers" json:"brokers"`
+	Topic   string   `yaml:"topic" json:"topic"`
+	GroupID string   `yaml:"group_id" json:"group_id"`
 }
 
 // StorageConfig 本地存储配置
 type StorageConfig struct {
-	DBPath       string `yaml:"db_path"`        // SQLite 数据库文件路径
-	RetentionDays int   `yaml:"retention_days"` // 消息保留天数
-	MaxRecords   int    `yaml:"max_records"`    // 最大保留记录数
+	DBPath       string `yaml:"db_path" json:"db_path"`
+	RetentionDays int   `yaml:"retention_days" json:"retention_days"`
+	MaxRecords   int    `yaml:"max_records" json:"max_records"`
 }
 
 // NotifierConfig 通知配置
 type NotifierConfig struct {
-	Enabled bool `yaml:"enabled"` // 是否启用桌面通知
+	Enabled bool `yaml:"enabled" json:"enabled"`
 }
 
 // UpdaterConfig 自动更新配置
 type UpdaterConfig struct {
-	Enabled   bool        `yaml:"enabled"`    // 是否启用自动更新检查
-	CheckURL  string      `yaml:"check_url"`  // 检查更新的 URL
-	Interval  time.Duration `yaml:"interval"` // 检查间隔（Go duration 格式，如 24h）
+	Enabled   bool          `yaml:"enabled" json:"enabled"`
+	CheckURL  string        `yaml:"check_url" json:"check_url"`
+	Interval  time.Duration `yaml:"interval" json:"interval"`
 }
 
 // LoadConfig 从 YAML 文件加载配置
