@@ -37,3 +37,8 @@ updater:
   enabled: false                # 是否启用自动更新检查
   check_url: ""                 # 检查新版本信息的 URL
   interval: "24h"               # 检查间隔，Go duration 格式（如 1h, 24h, 30m）
+
+# Web UI 配置
+web:
+  enabled: true                 # 是否启用 Web UI
+  port: 18080                   # Web UI 监听端口

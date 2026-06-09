@@ -15,6 +15,13 @@ type Config struct {
 	Notifier NotifierConfig `yaml:"notifier"`
 	Updater  UpdaterConfig  `yaml:"updater"`
 	Consumer ConsumerConfig `yaml:"consumer"`
+	Web      WebConfig      `yaml:"web"`
+}
+
+// WebConfig Web UI 配置
+type WebConfig struct {
+	Enabled bool `yaml:"enabled"` // 是否启用 Web UI
+	Port    int  `yaml:"port"`    // Web UI 端口
 }
 
 // RedisConfig Redis 连接配置

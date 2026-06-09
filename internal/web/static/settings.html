@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlertFly - 设置</title>
+    <link rel="stylesheet" href="/css/layui.css">
+    <style>
+        body { background: #f2f2f2; }
+        .app-header {
+            background: #393D49; color: #fff; padding: 12px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .app-header h2 { margin: 0; font-size: 18px; font-weight: 400; }
+        .app-header a { color: #c2c2c2; font-size: 14px; }
+        .app-header a:hover { color: #fff; }
+        .app-container { padding: 16px 24px; }
+        .settings-card {
+            background: #fff; border-radius: 4px; padding: 24px 32px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        .settings-card .layui-form-label { width: 140px; }
+        .settings-card .layui-input-block { margin-left: 170px; }
+        .settings-card .layui-input { max-width: 420px; }
+        .layui-tab-card { border-radius: 4px; border: none; box-shadow: none; }
+        .layui-tab-card .layui-tab-title { background: #f8f8f8; border-radius: 4px 4px 0 0; }
+        .form-footer {
+            margin-top: 24px; padding-top: 16px; border-top: 1px solid #e8e8e8;
+            text-align: center;
+        }
+        .layui-tab-content { padding: 20px 0 0; }
+    </style>
+</head>
+<body>
+    <!-- 顶部标题栏 -->
+    <div class="app-header">
+        <h2><i class="layui-icon layui-icon-set" style="margin-right:8px;font-size:20px;"></i>AlertFly 设置</h2>
+        <a href="/index.html"><i class="layui-icon layui-icon-return" style="margin-right:4px;"></i>返回</a>
+    </div>
+
+    <div class="app-container">
+        <div class="settings-card">
+            <form class="layui-form" id="settingsForm" lay-filter="settingsForm">
+                <div class="layui-tab layui-tab-card" lay-filter="settingsTab">
+                    <ul class="layui-tab-title">
+                        <li class="layui-this">连接设置</li>
+                        <li>存储设置</li>
+                        <li>通知设置</li>
+                        <li>更新设置</li>
+                    </ul>
+                    <div class="layui-tab-content">
+                        <!-- 连接设置 -->
+                        <div class="layui-tab-item layui-show">
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">消费模式</label>
+                                <div class="layui-input-block">
+                                    <input type="radio" name="consumer_type" value="redis" title="Redis" checked>
+                                    <input type="radio" name="consumer_type" value="kafka" title="Kafka">
+                                </div>
+                            </div>
+
+                            <fieldset class="layui-elem-field" id="redisFieldset" style="margin-top:12px;">
+                                <legend>Redis 配置</legend>
+                                <div class="layui-field-box" style="padding: 12px 0 0;">
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">地址</label>
+                                        <div class="layui-input-block">
+                                            <input type="text" name="redis_addr" placeholder="如 localhost:6379" autocomplete="off" class="layui-input">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">密码</label>
+                                        <div class="layui-input-block">
+                                            <input type="password" name="redis_password" placeholder="无密码可留空" autocomplete="off" class="layui-input">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">DB</label>
+                                        <div class="layui-input-block">
+                                            <input type="number" name="redis_db" value="0" placeholder="0" autocomplete="off" class="layui-input">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">Channel</label>
+                                        <div class="layui-input-block">
+                                            <input type="text" name="redis_channel" placeholder="Pub/Sub channel 名称" autocomplete="off" class="layui-input">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">Stream</label>
+                                        <div class="layui-input-block">
+                                            <input type="text" name="redis_stream" placeholder="Stream 名称" autocomplete="off" class="layui-input">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">ConsumerGroup</label>
+                                        <div class="layui-input-block">
+                                            <input type="text" name="redis_consumer_group" placeholder="Consumer Group 名称" autocomplete="off" class="layui-input">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">模式</label>
+                                        <div class="layui-input-block">
+                                            <input type="radio" name="redis_mode" value="pubsub" title="Pub/Sub">
+                                            <input type="radio" name="redis_mode" value="stream" title="Stream">
+                                        </div>
+                                    </div>
+                                </div>
+                            </fieldset>
+
+                            <fieldset class="layui-elem-field" id="kafkaFieldset" style="margin-top:16px;">
+                                <legend>Kafka 配置</legend>
+                                <div class="layui-field-box" style="padding: 12px 0 0;">
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">Brokers</label>
+                                        <div class="layui-input-block">
+                                            <input type="text" name="kafka_brokers" placeholder="逗号分隔，如 10.0.0.1:9092,10.0.0.2:9092" autocomplete="off" class="layui-input">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">Topic</label>
+                                        <div class="layui-input-block">
+                                            <input type="text" name="kafka_topic" placeholder="Kafka Topic" autocomplete="off" class="layui-input">
+                                        </div>
+                                    </div>
+                                    <div class="layui-form-item">
+                                        <label class="layui-form-label">GroupID</label>
+                                        <div class="layui-input-block">
+                                            <input type="text" name="kafka_group_id" placeholder="Consumer Group ID" autocomplete="off" class="layui-input">
+                                        </div>
+                                    </div>
+                                </div>
+                            </fieldset>
+                        </div>
+
+                        <!-- 存储设置 -->
+                        <div class="layui-tab-item">
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">SQLite 路径</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="storage_db_path" placeholder="数据库文件路径，如 ./data/alertfly.db" autocomplete="off" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">保留天数</label>
+                                <div class="layui-input-block">
+                                    <input type="number" name="storage_retention_days" placeholder="7" autocomplete="off" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">最大记录数</label>
+                                <div class="layui-input-block">
+                                    <input type="number" name="storage_max_records" placeholder="10000" autocomplete="off" class="layui-input">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 通知设置 -->
+                        <div class="layui-tab-item">
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">启用弹窗通知</label>
+                                <div class="layui-input-block">
+                                    <input type="checkbox" name="notifier_enabled" lay-skin="switch" lay-text="开|关">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 更新设置 -->
+                        <div class="layui-tab-item">
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">启用自更新</label>
+                                <div class="layui-input-block">
+                                    <input type="checkbox" name="updater_enabled" lay-skin="switch" lay-text="开|关">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">检查地址</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="updater_check_url" placeholder="更新检查 URL" autocomplete="off" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">轮询间隔(分钟)</label>
+                                <div class="layui-input-block">
+                                    <input type="number" name="updater_interval" placeholder="1440（分钟）" autocomplete="off" class="layui-input">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 底部按钮 -->
+                <div class="form-footer">
+                    <button type="button" class="layui-btn layui-btn-normal" id="btnSave" style="width:120px;"><i class="layui-icon layui-icon-ok"></i> 保存</button>
+                    <button type="button" class="layui-btn layui-btn-primary" id="btnCancel" style="width:120px;">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/layui.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>

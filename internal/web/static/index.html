@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AlertFly - 告警历史</title>
+    <link rel="stylesheet" href="/css/layui.css">
+    <style>
+        body { background: #f2f2f2; }
+        .app-header {
+            background: #393D49; color: #fff; padding: 12px 24px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .app-header h2 { margin: 0; font-size: 18px; font-weight: 400; }
+        .app-header a { color: #c2c2c2; font-size: 14px; }
+        .app-header a:hover { color: #fff; }
+        .app-container { padding: 16px 24px; }
+        .filter-card {
+            background: #fff; border-radius: 4px; padding: 16px 20px 6px;
+            margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        .filter-card .layui-form-label { width: 80px; padding: 8px 10px; }
+        .filter-card .layui-input-block { margin-left: 110px; }
+        .filter-card .layui-input, .filter-card .layui-select { height: 34px; }
+        .btn-group { margin-top: 4px; padding-bottom: 10px; }
+        .data-card {
+            background: #fff; border-radius: 4px; padding: 16px 20px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+        /* 级别标签样式 */
+        .level-tag { padding: 2px 8px; border-radius: 2px; font-size: 12px; color: #fff; }
+        .level-error { background: #FF5722; }
+        .level-warn  { background: #FFB800; }
+        .level-info  { background: #009688; }
+        /* 行展开详情 */
+        .row-detail { display: none; background: #fafafa; }
+        .row-detail-inner { padding: 16px 120px 16px 30px; }
+        .row-detail-inner pre {
+            background: #f6f8fa; border: 1px solid #e8e8e8; border-radius: 4px;
+            padding: 12px 16px; font-size: 13px; line-height: 1.6;
+            max-height: 400px; overflow: auto; white-space: pre-wrap; word-wrap: break-word;
+        }
+        .row-toggle { cursor: pointer; }
+        .row-toggle:hover { background: #f8f8f8; }
+        /* 分页 */
+        .pager-bar { padding: 12px 0 4px; text-align: right; }
+        /* 标题列截断 */
+        .cell-ellipsis {
+            max-width: 200px; overflow: hidden; text-overflow: ellipsis;
+            white-space: nowrap; display: inline-block; vertical-align: middle;
+        }
+    </style>
+</head>
+<body>
+    <!-- 顶部标题栏 -->
+    <div class="app-header">
+        <h2><i class="layui-icon layui-icon-notice" style="margin-right:8px;font-size:20px;"></i>AlertFly 告警历史</h2>
+        <a href="/settings.html"><i class="layui-icon layui-icon-set" style="margin-right:4px;"></i>设置</a>
+    </div>
+
+    <div class="app-container">
+        <!-- 过滤区域 -->
+        <div class="filter-card">
+            <form class="layui-form" id="filterForm" lay-filter="filterForm">
+                <div class="layui-row layui-col-space12">
+                    <div class="layui-col-md4">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">关键字</label>
+                            <div class="layui-input-block">
+                                <input type="text" name="keyword" placeholder="标题/内容关键字" autocomplete="off" class="layui-input">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="layui-col-md4">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">级别</label>
+                            <div class="layui-input-block">
+                                <select name="level" lay-filter="level">
+                                    <option value="">全部</option>
+                                    <option value="info">info</option>
+                                    <option value="warn">warn</option>
+                                    <option value="error">error</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="layui-col-md4">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">来源</label>
+                            <div class="layui-input-block">
+                                <select name="source" lay-filter="source">
+                                    <option value="">全部</option>
+                                    <option value="redis">redis</option>
+                                    <option value="kafka">kafka</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="layui-row layui-col-space12">
+                    <div class="layui-col-md4">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">任务</label>
+                            <div class="layui-input-block">
+                                <input type="text" name="mission" placeholder="任务名称" autocomplete="off" class="layui-input">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="layui-col-md4">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">发送者</label>
+                            <div class="layui-input-block">
+                                <input type="text" name="sender" placeholder="发送者" autocomplete="off" class="layui-input">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="layui-col-md4">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">子类型</label>
+                            <div class="layui-input-block">
+                                <input type="text" name="subtype" placeholder="消息子类型" autocomplete="off" class="layui-input">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="layui-row layui-col-space12">
+                    <div class="layui-col-md4">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">开始时间</label>
+                            <div class="layui-input-block">
+                                <input type="text" name="startTime" id="startTime" placeholder="开始时间" autocomplete="off" class="layui-input">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="layui-col-md4">
+                        <div class="layui-form-item">
+                            <label class="layui-form-label">结束时间</label>
+                            <div class="layui-input-block">
+                                <input type="text" name="endTime" id="endTime" placeholder="结束时间" autocomplete="off" class="layui-input">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="layui-col-md4">
+                        <div class="btn-group">
+                            <button type="button" class="layui-btn layui-btn-sm" id="btnQuery"><i class="layui-icon layui-icon-search"></i> 查询</button>
+                            <button type="reset" class="layui-btn layui-btn-primary layui-btn-sm" id="btnReset"><i class="layui-icon layui-icon-refresh"></i> 重置</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- 数据表格 -->
+        <div class="data-card">
+            <table id="msgTable" lay-filter="msgTable"></table>
+            <div class="pager-bar">
+                <div id="pager"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/layui.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
