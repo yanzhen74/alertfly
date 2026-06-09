@@ -31,3 +31,6 @@ vendor/
 /update-server/alertfly.exe
 /update-server/*.tar.gz
 /update-server/*.zip
+
+# Windows Zone.Identifier 文件
+*:Zone.Identifier
