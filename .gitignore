@@ -25,3 +25,9 @@ vendor/
 # Temp
 *.tmp
 *.download
+
+# update-server 中的二进制文件（version.json 和脚本需要提交）
+/update-server/alertfly
+/update-server/alertfly.exe
+/update-server/*.tar.gz
+/update-server/*.zip

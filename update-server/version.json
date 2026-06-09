@@ -1,0 +1,5 @@
+{
+  "version": "0.2.0",
+  "url": "http://YOUR_SERVER_IP:8000/alertfly.exe",
+  "sha256": "TO_BE_FILLED_AFTER_BUILD"
+}
