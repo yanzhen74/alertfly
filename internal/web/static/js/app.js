@@ -369,6 +369,33 @@
 
     if (isSettingsPage) {
       initSettingsPage(layui);
+      // 立即检查更新按钮
+      var btnCheckUpdate = document.getElementById('btnCheckUpdate');
+      var updateStatus = document.getElementById('updateStatus');
+      if (btnCheckUpdate) {
+        btnCheckUpdate.onclick = function() {
+          btnCheckUpdate.disabled = true;
+          updateStatus.innerHTML = '<i class="layui-icon layui-icon-loading layui-anim layui-anim-rotate layui-anim-loop"></i> 正在检查...';
+          var xhr = new XMLHttpRequest();
+          xhr.open('POST', '/api/update/check', true);
+          xhr.onreadystatechange = function() {
+            if (xhr.readyState === 4) {
+              btnCheckUpdate.disabled = false;
+              if (xhr.status === 200) {
+                var res = JSON.parse(xhr.responseText);
+                if (res.code === 0) {
+                  updateStatus.innerHTML = '<span style="color:#5FB878;">' + res.msg + '</span>';
+                } else {
+                  updateStatus.innerHTML = '<span style="color:#FF5722;">' + res.msg + '</span>';
+                }
+              } else {
+                updateStatus.innerHTML = '<span style="color:#FF5722;">请求失败</span>';
+              }
+            }
+          };
+          xhr.send();
+        };
+      }
     }
   });
 

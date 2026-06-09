@@ -18,12 +18,13 @@ import (
 
 // WebServer HTTP Web 服务器，提供前端页面和 REST API
 type WebServer struct {
-	port      int
+	port       int
 	configPath string
-	storage   storage.Storage
-	config    *config.Config
-	engine    *gin.Engine
-	server    *http.Server
+	storage    storage.Storage
+	config     *config.Config
+	engine     *gin.Engine
+	server     *http.Server
+	onCheckUpdate func() error // 立即检查更新回调
 }
 
 // NewWebServer 创建 Web 服务器实例
@@ -102,6 +103,7 @@ func (s *WebServer) registerRoutes() {
 	s.engine.GET("/api/config", s.handleGetConfig)
 	s.engine.PUT("/api/config", s.handleUpdateConfig)
 	s.engine.GET("/api/status", s.handleStatus)
+	s.engine.POST("/api/update/check", s.handleCheckUpdate)
 }
 
 // Start 启动 HTTP 服务（非阻塞，内部启动 goroutine）
@@ -126,6 +128,24 @@ func (s *WebServer) Start() error {
 	go s.openBrowser()
 
 	return nil
+}
+
+// SetCheckUpdateHandler 设置立即检查更新的回调函数
+func (s *WebServer) SetCheckUpdateHandler(fn func() error) {
+	s.onCheckUpdate = fn
+}
+
+// handleCheckUpdate POST /api/update/check — 立即检查更新
+func (s *WebServer) handleCheckUpdate(c *gin.Context) {
+	if s.onCheckUpdate == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "更新功能未初始化"})
+		return
+	}
+	if err := s.onCheckUpdate(); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 1, "msg": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "已是最新版本，无需更新"})
 }
 
 // Stop 优雅关闭 HTTP 服务器

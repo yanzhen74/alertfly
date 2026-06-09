@@ -19,8 +19,12 @@ import (
 	"github.com/oliverxu/alertfly/internal/proxy"
 	"github.com/oliverxu/alertfly/internal/storage"
 	"github.com/oliverxu/alertfly/internal/tray"
+	"github.com/oliverxu/alertfly/internal/updater"
 	"github.com/oliverxu/alertfly/internal/web"
 )
+
+// version 由 build.sh 通过 ldflags 注入
+var version = "dev"
 
 func main() {
 	// --- 命令行参数解析 ---
@@ -143,6 +147,31 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 	if err := ws.Start(); err != nil {
 		log.Printf("[main] Web UI 启动失败: %v", err)
 	}
+
+	// --- 初始化 Updater（自更新）---
+	var ud *updater.Updater
+	if cfg.Updater.CheckURL != "" {
+		udCfg := updater.Config{
+			Enabled:  cfg.Updater.Enabled,
+			CheckURL: cfg.Updater.CheckURL,
+			Interval: cfg.Updater.Interval,
+		}
+		if udCfg.Interval == 0 {
+			udCfg.Interval = 24 * time.Hour
+		}
+		ud = updater.NewUpdater(udCfg, version, func(title string, body string) {
+			log.Printf("[updater] %s: %s", title, body)
+		})
+		ud.Start(ctx)
+		log.Println("[main] Updater 已启动")
+	}
+	// 注册立即检查更新回调
+	ws.SetCheckUpdateHandler(func() error {
+		if ud == nil {
+			return fmt.Errorf("自更新未配置，请先设置检查地址")
+		}
+		return ud.CheckAndUpdate()
+	})
 
 	// --- 初始化 Proxy ---
 	px := proxy.NewProxy()
