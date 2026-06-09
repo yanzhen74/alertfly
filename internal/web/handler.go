@@ -125,8 +125,8 @@ func (s *WebServer) handleStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
 		"data": gin.H{
-			"connected":     false,
-			"consumer_type": s.config.Consumer.Type,
+			"redis_enabled": s.config.Redis.Enabled,
+			"kafka_enabled": s.config.Kafka.Enabled,
 			"last_error":    "",
 		},
 	})

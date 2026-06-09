@@ -14,7 +14,6 @@ type Config struct {
 	Storage  StorageConfig  `yaml:"storage"`
 	Notifier NotifierConfig `yaml:"notifier"`
 	Updater  UpdaterConfig  `yaml:"updater"`
-	Consumer ConsumerConfig `yaml:"consumer"`
 	Web      WebConfig      `yaml:"web"`
 }
 
@@ -26,6 +25,7 @@ type WebConfig struct {
 
 // RedisConfig Redis 连接配置
 type RedisConfig struct {
+	Enabled       bool   `yaml:"enabled"`        // 是否启用 Redis 消费者
 	Addr          string `yaml:"addr"`           // Redis 地址，如 localhost:6379
 	Password      string `yaml:"password"`       // Redis 密码
 	DB            int    `yaml:"db"`             // Redis 数据库编号
@@ -37,8 +37,9 @@ type RedisConfig struct {
 
 // KafkaConfig Kafka 连接配置
 type KafkaConfig struct {
-	Brokers []string `yaml:"brokers"` // Kafka broker 地址列表
-	Topic   string   `yaml:"topic"`   // Kafka topic 名称
+	Enabled bool     `yaml:"enabled"`  // 是否启用 Kafka 消费者
+	Brokers []string `yaml:"brokers"`  // Kafka broker 地址列表
+	Topic   string   `yaml:"topic"`    // Kafka topic 名称
 	GroupID string   `yaml:"group_id"` // Kafka Consumer Group ID
 }
 
@@ -59,11 +60,6 @@ type UpdaterConfig struct {
 	Enabled   bool        `yaml:"enabled"`    // 是否启用自动更新检查
 	CheckURL  string      `yaml:"check_url"`  // 检查更新的 URL
 	Interval  time.Duration `yaml:"interval"` // 检查间隔（Go duration 格式，如 24h）
-}
-
-// ConsumerConfig 消费者类型配置
-type ConsumerConfig struct {
-	Type string `yaml:"type"` // redis 或 kafka
 }
 
 // LoadConfig 从 YAML 文件加载配置

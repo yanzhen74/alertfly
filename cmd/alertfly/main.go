@@ -70,8 +70,9 @@ func main() {
 	if cfg.Storage.MaxRecords == 0 {
 		cfg.Storage.MaxRecords = 10000
 	}
-	if cfg.Consumer.Type == "" {
-		cfg.Consumer.Type = "redis"
+	// 默认启用至少一个消费者（兼容旧配置文件无 enabled 字段的情况）
+	if !cfg.Redis.Enabled && !cfg.Kafka.Enabled {
+		cfg.Redis.Enabled = true
 	}
 
 	// Web 配置默认值
@@ -160,51 +161,41 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 	}
 
 	// --- 初始化并启动 Consumer（带重试） ---
-	var cons consumer.Consumer
-	{
+	// 支持同时启用 Redis 和 Kafka 两个消费者
+	type consumerEntry struct {
+		consumer.Consumer
+		name string
+	}
+	var consumers []consumerEntry
+
+	createAndStart := func(name string, createFn func() (consumer.Consumer, error)) (consumer.Consumer, error) {
 		retryInterval := 5 * time.Second
 		const maxRetryInterval = 60 * time.Second
 		for {
-			var createErr error
-			switch cfg.Consumer.Type {
-			case "redis":
-				cons, createErr = consumer.NewRedisConsumer(&cfg.Redis)
-				if createErr != nil {
-					cons = nil
-					createErr = fmt.Errorf("创建 Redis 消费者失败: %w", createErr)
-				}
-			case "kafka":
-				cons, createErr = consumer.NewKafkaConsumer(&cfg.Kafka)
-				if createErr != nil {
-					cons = nil
-					createErr = fmt.Errorf("创建 Kafka 消费者失败: %w", createErr)
-				}
-			default:
-				log.Fatalf("[main] 不支持的消费者类型: %s", cfg.Consumer.Type)
-			}
-
-			if createErr == nil {
-				if startErr := cons.Start(ctx); startErr != nil {
-					cons.Close()
-					cons = nil
-					createErr = fmt.Errorf("启动消费者失败: %w", startErr)
+			c, createErr := createFn()
+			if createErr != nil {
+				c = nil
+			} else {
+				if startErr := c.Start(ctx); startErr != nil {
+					c.Close()
+					c = nil
+					createErr = fmt.Errorf("启动 %s 消费者失败: %w", name, startErr)
 				}
 			}
-
 			if createErr == nil {
-				log.Printf("[main] 消费者已启动，类型: %s", cfg.Consumer.Type)
-				break
+				log.Printf("[main] %s 消费者已启动", name)
+				return c, nil
 			}
 
 			log.Printf("[main] %v，%v 后重试...", createErr, retryInterval)
-			if notifyErr := nt.NotifyError("消费者启动失败", createErr.Error()); notifyErr != nil {
+			if notifyErr := nt.NotifyError(name+"消费者启动失败", createErr.Error()); notifyErr != nil {
 				log.Printf("[main] 发送错误通知失败: %v", notifyErr)
 			}
 
 			select {
 			case <-ctx.Done():
 				log.Println("[main] 收到退出信号，停止重试")
-				goto shutdown
+				return nil, fmt.Errorf("退出")
 			case <-time.After(retryInterval):
 			}
 
@@ -213,6 +204,28 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 				retryInterval = maxRetryInterval
 			}
 		}
+	}
+
+	if cfg.Redis.Enabled {
+		c, err := createAndStart("Redis", func() (consumer.Consumer, error) {
+			return consumer.NewRedisConsumer(&cfg.Redis)
+		})
+		if err == nil && c != nil {
+			consumers = append(consumers, consumerEntry{c, "Redis"})
+		}
+	}
+
+	if cfg.Kafka.Enabled {
+		c, err := createAndStart("Kafka", func() (consumer.Consumer, error) {
+			return consumer.NewKafkaConsumer(&cfg.Kafka)
+		})
+		if err == nil && c != nil {
+			consumers = append(consumers, consumerEntry{c, "Kafka"})
+		}
+	}
+
+	if len(consumers) == 0 {
+		log.Fatalf("[main] 未启用任何消费者，请启用 Redis 或 Kafka")
 	}
 
 	// --- 定期清理 goroutine ---
@@ -234,13 +247,38 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 	}()
 
 	// --- 主循环 ---
+	// 合并所有消费者的消息通道和错误通道
+	msgCh := make(chan *model.Message)
+	errCh := make(chan error)
+	for i := range consumers {
+		ce := consumers[i]
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case m, ok := <-ce.Messages():
+					if !ok {
+						return
+					}
+					msgCh <- m
+				case e, ok := <-ce.Errors():
+					if !ok {
+						return
+					}
+					errCh <- e
+				}
+			}
+		}()
+	}
+
 	log.Println("[main] AlertFly 主循环启动，等待消息...")
 	for {
 		select {
 		case <-ctx.Done():
 			log.Println("[main] 主循环退出")
 			goto shutdown
-		case msg, ok := <-cons.Messages():
+		case msg, ok := <-msgCh:
 			if !ok {
 				log.Println("[main] 消息通道已关闭")
 				goto shutdown
@@ -286,7 +324,7 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 				}
 			}
 
-		case err, ok := <-cons.Errors():
+		case err, ok := <-errCh:
 			if !ok {
 				log.Println("[main] 错误通道已关闭")
 				continue
@@ -308,9 +346,9 @@ shutdown:
 		}
 	}
 	log.Println("[main] 正在关闭消费者...")
-	if cons != nil {
-		if err := cons.Close(); err != nil {
-			log.Printf("[main] 关闭消费者失败: %v", err)
+	for _, ce := range consumers {
+		if err := ce.Close(); err != nil {
+			log.Printf("[main] 关闭 %s 消费者失败: %v", ce.name, err)
 		}
 	}
 	log.Println("[main] 正在关闭存储...")

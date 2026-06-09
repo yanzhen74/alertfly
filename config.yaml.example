@@ -1,12 +1,9 @@
 # AlertFly 配置文件示例
 # 复制此文件为 config.yaml 并根据实际环境修改
 
-# 消费者类型：redis 或 kafka
-consumer:
-  type: "redis"
-
 # Redis 配置
 redis:
+  enabled: true                  # 是否启用 Redis 消费者
   addr: "localhost:6379"        # Redis 服务地址
   password: ""                  # Redis 密码，无密码留空
   db: 0                         # Redis 数据库编号
@@ -17,6 +14,7 @@ redis:
 
 # Kafka 配置
 kafka:
+  enabled: false                # 是否启用 Kafka 消费者
   brokers:                      # Kafka broker 地址列表
     - "localhost:9092"
   topic: "alerts"               # Kafka topic 名称

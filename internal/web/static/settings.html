@@ -51,15 +51,15 @@
                     <div class="layui-tab-content">
                         <!-- 连接设置 -->
                         <div class="layui-tab-item layui-show">
+                            <!-- Redis 启用开关 -->
                             <div class="layui-form-item">
-                                <label class="layui-form-label">消费模式</label>
+                                <label class="layui-form-label">启用 Redis</label>
                                 <div class="layui-input-block">
-                                    <input type="radio" name="consumer_type" value="redis" title="Redis" checked>
-                                    <input type="radio" name="consumer_type" value="kafka" title="Kafka">
+                                    <input type="checkbox" name="redis_enabled" lay-skin="switch" lay-text="开|关" lay-filter="redis_enabled">
                                 </div>
                             </div>
 
-                            <fieldset class="layui-elem-field" id="redisFieldset" style="margin-top:12px;">
+                            <fieldset class="layui-elem-field" id="redisFieldset" style="margin-top:0;">
                                 <legend>Redis 配置</legend>
                                 <div class="layui-field-box" style="padding: 12px 0 0;">
                                     <div class="layui-form-item">
@@ -108,7 +108,15 @@
                                 </div>
                             </fieldset>
 
-                            <fieldset class="layui-elem-field" id="kafkaFieldset" style="margin-top:16px;">
+                            <!-- Kafka 启用开关 -->
+                            <div class="layui-form-item" style="margin-top:16px;">
+                                <label class="layui-form-label">启用 Kafka</label>
+                                <div class="layui-input-block">
+                                    <input type="checkbox" name="kafka_enabled" lay-skin="switch" lay-text="开|关" lay-filter="kafka_enabled">
+                                </div>
+                            </div>
+
+                            <fieldset class="layui-elem-field" id="kafkaFieldset" style="margin-top:0;">
                                 <legend>Kafka 配置</legend>
                                 <div class="layui-field-box" style="padding: 12px 0 0;">
                                     <div class="layui-form-item">

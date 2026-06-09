@@ -212,50 +212,76 @@
     var form = layui.form;
     var layer = layui.layer;
 
-    // 消费模式切换：显示/隐藏对应配置区域
-    form.on('radio(consumer_type)', function (data) {
-      toggleConsumerFieldset(data.value);
+    // Redis/Kafka 启用开关切换：显示/隐藏对应配置区域
+    form.on('switch(redis_enabled)', function (data) {
+      toggleFieldset('redisFieldset', data.elem.checked);
+      ensureAtLeastOneEnabled();
     });
 
-    function toggleConsumerFieldset(type) {
-      var redisFs = document.getElementById('redisFieldset');
-      var kafkaFs = document.getElementById('kafkaFieldset');
-      if (type === 'redis') {
-        redisFs.style.display = '';
-        kafkaFs.style.display = 'none';
+    form.on('switch(kafka_enabled)', function (data) {
+      toggleFieldset('kafkaFieldset', data.elem.checked);
+      ensureAtLeastOneEnabled();
+    });
+
+    function toggleFieldset(fieldsetId, enabled) {
+      var fs = document.getElementById(fieldsetId);
+      if (enabled) {
+        fs.style.display = '';
+        fs.style.opacity = '1';
+        fs.style.pointerEvents = 'auto';
       } else {
-        redisFs.style.display = 'none';
-        kafkaFs.style.display = '';
+        fs.style.display = 'none';
       }
+    }
+
+    function ensureAtLeastOneEnabled() {
+      var redisSwitch = document.querySelector('input[name="redis_enabled"]');
+      var kafkaSwitch = document.querySelector('input[name="kafka_enabled"]');
+      if (!redisSwitch.checked && !kafkaSwitch.checked) {
+        layer.msg('至少需要启用一个消费者', { icon: 0 });
+      }
+    }
+
+    function isRedisEnabled() {
+      var el = document.querySelector('input[name="redis_enabled"]');
+      return el && el.checked;
+    }
+
+    function isKafkaEnabled() {
+      var el = document.querySelector('input[name="kafka_enabled"]');
+      return el && el.checked;
     }
 
     // 加载配置
     function loadConfig() {
-      fetch('/api/config').then(function (res) { return res.json(); }).then(function (data) {
+      fetch('/api/config').then(function (res) { return res.json(); }).then(function (result) {
+        var data = result.data || result;
         // 填充表单
         form.val('settingsForm', {
-          consumer_type: data.consumer_type || 'redis',
-          redis_addr: data.redis_addr || '',
-          redis_password: data.redis_password || '',
-          redis_db: data.redis_db != null ? String(data.redis_db) : '0',
-          redis_channel: data.redis_channel || '',
-          redis_stream: data.redis_stream || '',
-          redis_consumer_group: data.redis_consumer_group || '',
-          redis_mode: data.redis_mode || 'pubsub',
-          kafka_brokers: data.kafka_brokers || '',
-          kafka_topic: data.kafka_topic || '',
-          kafka_group_id: data.kafka_group_id || '',
-          storage_db_path: data.storage_db_path || '',
-          storage_retention_days: data.storage_retention_days != null ? String(data.storage_retention_days) : '',
-          storage_max_records: data.storage_max_records != null ? String(data.storage_max_records) : '',
-          notifier_enabled: data.notifier_enabled ? true : false,
-          updater_enabled: data.updater_enabled ? true : false,
-          updater_check_url: data.updater_check_url || '',
-          updater_interval: data.updater_interval != null ? String(data.updater_interval) : ''
+          redis_enabled: data.redis && data.redis.enabled ? true : false,
+          redis_addr: (data.redis && data.redis.addr) || '',
+          redis_password: (data.redis && data.redis.password) || '',
+          redis_db: (data.redis && data.redis.db != null) ? String(data.redis.db) : '0',
+          redis_channel: (data.redis && data.redis.channel) || '',
+          redis_stream: (data.redis && data.redis.stream) || '',
+          redis_consumer_group: (data.redis && data.redis.consumer_group) || '',
+          redis_mode: (data.redis && data.redis.mode) || 'pubsub',
+          kafka_enabled: data.kafka && data.kafka.enabled ? true : false,
+          kafka_brokers: (data.kafka && data.kafka.brokers) ? data.kafka.brokers.join(',') : '',
+          kafka_topic: (data.kafka && data.kafka.topic) || '',
+          kafka_group_id: (data.kafka && data.kafka.group_id) || '',
+          storage_db_path: (data.storage && data.storage.db_path) || '',
+          storage_retention_days: (data.storage && data.storage.retention_days != null) ? String(data.storage.retention_days) : '',
+          storage_max_records: (data.storage && data.storage.max_records != null) ? String(data.storage.max_records) : '',
+          notifier_enabled: (data.notifier && data.notifier.enabled) ? true : false,
+          updater_enabled: (data.updater && data.updater.enabled) ? true : false,
+          updater_check_url: (data.updater && data.updater.check_url) || '',
+          updater_interval: (data.updater && data.updater.interval != null) ? String(data.updater.interval) : ''
         });
 
-        // 切换消费模式区域显示
-        toggleConsumerFieldset(data.consumer_type || 'redis');
+        // 根据 enabled 状态切换配置区域显示
+        toggleFieldset('redisFieldset', data.redis && data.redis.enabled);
+        toggleFieldset('kafkaFieldset', data.kafka && data.kafka.enabled);
       }).catch(function (err) {
         console.error('加载配置失败:', err);
         layer.msg('加载配置失败', { icon: 2 });
@@ -266,26 +292,45 @@
     document.getElementById('btnSave').onclick = function () {
       var data = form.val('settingsForm');
 
+      // 至少启用一个消费者
+      var redisOn = data.redis_enabled === 'on';
+      var kafkaOn = data.kafka_enabled === 'on';
+      if (!redisOn && !kafkaOn) {
+        layer.msg('至少需要启用一个消费者（Redis 或 Kafka）', { icon: 0 });
+        return;
+      }
+
       // 组装提交数据
       var payload = {
-        consumer_type: data.consumer_type,
-        redis_addr: data.redis_addr,
-        redis_password: data.redis_password,
-        redis_db: parseInt(data.redis_db) || 0,
-        redis_channel: data.redis_channel,
-        redis_stream: data.redis_stream,
-        redis_consumer_group: data.redis_consumer_group,
-        redis_mode: data.redis_mode,
-        kafka_brokers: data.kafka_brokers,
-        kafka_topic: data.kafka_topic,
-        kafka_group_id: data.kafka_group_id,
-        storage_db_path: data.storage_db_path,
-        storage_retention_days: parseInt(data.storage_retention_days) || 0,
-        storage_max_records: parseInt(data.storage_max_records) || 0,
-        notifier_enabled: data.notifier_enabled === 'on',
-        updater_enabled: data.updater_enabled === 'on',
-        updater_check_url: data.updater_check_url,
-        updater_interval: parseInt(data.updater_interval) || 0
+        redis: {
+          enabled: redisOn,
+          addr: data.redis_addr,
+          password: data.redis_password,
+          db: parseInt(data.redis_db) || 0,
+          channel: data.redis_channel,
+          stream: data.redis_stream,
+          consumer_group: data.redis_consumer_group,
+          mode: data.redis_mode
+        },
+        kafka: {
+          enabled: kafkaOn,
+          brokers: data.kafka_brokers ? data.kafka_brokers.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [],
+          topic: data.kafka_topic,
+          group_id: data.kafka_group_id
+        },
+        storage: {
+          db_path: data.storage_db_path,
+          retention_days: parseInt(data.storage_retention_days) || 0,
+          max_records: parseInt(data.storage_max_records) || 0
+        },
+        notifier: {
+          enabled: data.notifier_enabled === 'on'
+        },
+        updater: {
+          enabled: data.updater_enabled === 'on',
+          check_url: data.updater_check_url,
+          interval: parseInt(data.updater_interval) || 0
+        }
       };
 
       fetch('/api/config', {
