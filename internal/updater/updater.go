@@ -20,9 +20,13 @@ import (
 
 // VersionInfo 远程版本信息
 type VersionInfo struct {
-	Version string `json:"version"`
-	URL     string `json:"url"`
-	SHA256  string `json:"sha256"`
+	Version      string `json:"version"`
+	URL          string `json:"url"`           // 通用 URL（向后兼容）
+	SHA256       string `json:"sha256"`        // 通用 SHA256（向后兼容）
+	LinuxURL     string `json:"linux_url"`     // Linux 专用下载地址
+	LinuxSHA256  string `json:"linux_sha256"`  // Linux 专用 SHA256
+	WindowsURL   string `json:"windows_url"`   // Windows 专用下载地址
+	WindowsSHA256 string `json:"windows_sha256"` // Windows 专用 SHA256
 }
 
 // Config 更新器配置
@@ -159,8 +163,26 @@ func (u *Updater) fetchVersionInfo() (*VersionInfo, error) {
 		return nil, fmt.Errorf("解析 JSON: %w", err)
 	}
 
-	if info.Version == "" || info.URL == "" {
-		return nil, fmt.Errorf("版本信息不完整: version 或 url 为空")
+	if info.Version == "" {
+		return nil, fmt.Errorf("版本信息不完整: version 为空")
+	}
+
+	// 根据平台选取对应的 URL 和 SHA256
+	switch runtime.GOOS {
+	case "linux":
+		if info.LinuxURL != "" {
+			info.URL = info.LinuxURL
+			info.SHA256 = info.LinuxSHA256
+		}
+	case "windows":
+		if info.WindowsURL != "" {
+			info.URL = info.WindowsURL
+			info.SHA256 = info.WindowsSHA256
+		}
+	}
+
+	if info.URL == "" {
+		return nil, fmt.Errorf("版本信息不完整: 当前平台(%s)无可用下载地址", runtime.GOOS)
 	}
 
 	return &info, nil

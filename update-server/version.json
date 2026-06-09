@@ -1,5 +1,7 @@
 {
   "version": "0.2.0",
-  "url": "http://YOUR_SERVER_IP:8000/alertfly.exe",
-  "sha256": "TO_BE_FILLED_AFTER_BUILD"
+  "linux_url": "http://YOUR_SERVER_IP:8000/alertfly",
+  "linux_sha256": "TO_BE_FILLED_AFTER_BUILD",
+  "windows_url": "http://YOUR_SERVER_IP:8000/alertfly.exe",
+  "windows_sha256": "TO_BE_FILLED_AFTER_BUILD"
 }

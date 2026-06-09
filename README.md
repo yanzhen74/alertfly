@@ -71,14 +71,17 @@ python3 start_server.py
 ```json
 {
   "version": "0.2.0",
-  "url": "http://192.168.1.100:8000/alertfly.exe",
-  "sha256": "二进制文件的SHA256值"
+  "linux_url": "http://192.168.1.100:8000/alertfly",
+  "linux_sha256": "Linux二进制的SHA256值",
+  "windows_url": "http://192.168.1.100:8000/alertfly.exe",
+  "windows_sha256": "Windows二进制的SHA256值"
 }
 ```
 
 - `version`：新版本号（semver 格式）
-- `url`：客户端下载地址（必须用客户端可访问的内网 IP，不要用 localhost）
-- `sha256`：二进制文件的 SHA256 校验值
+- `linux_url` / `windows_url`：对应平台的下载地址（客户端自动按平台选取）
+- `linux_sha256` / `windows_sha256`：对应二进制的 SHA256 校验值
+- 也支持旧格式的 `url` + `sha256` 字段（单平台场景向后兼容）
 
 计算 SHA256：
 ```bash
