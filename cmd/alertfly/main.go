@@ -138,14 +138,9 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 	log.Println("[main] SQLite 存储初始化成功")
 
 	// --- 初始化 Web 服务器 ---
-	var ws *web.WebServer
-	if cfg.Web.Enabled {
-		ws = web.NewWebServer(cfg.Web.Port, *configPath, store, cfg)
-		if err := ws.Start(); err != nil {
-			log.Printf("[main] Web UI 启动失败: %v", err)
-		}
-	} else {
-		log.Println("[main] Web UI 已禁用")
+	ws := web.NewWebServer(cfg.Web.Port, *configPath, store, cfg)
+	if err := ws.Start(); err != nil {
+		log.Printf("[main] Web UI 启动失败: %v", err)
 	}
 
 	// --- 初始化 Proxy ---
