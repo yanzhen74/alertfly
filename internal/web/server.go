@@ -71,22 +71,30 @@ func (s *WebServer) registerRoutes() {
 		s.engine.StaticFS("/font", http.FS(fontFS))
 	}
 
-	// HTML 页面路由
-	staticSubFS, err := fs.Sub(StaticFS, "static")
-	if err != nil {
-		log.Printf("[web] 创建静态文件子目录失败: %v", err)
-		return
-	}
-	staticHTTPFS := http.FS(staticSubFS)
-
+	// HTML 页面路由 — 直接读取 embed 文件内容，避免 http.FileServer 重定向循环
 	s.engine.GET("/", func(c *gin.Context) {
-		c.FileFromFS("index.html", staticHTTPFS)
+		data, err := StaticFS.ReadFile("static/index.html")
+		if err != nil {
+			c.String(http.StatusInternalServerError, "读取页面失败")
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
 	})
 	s.engine.GET("/index.html", func(c *gin.Context) {
-		c.FileFromFS("index.html", staticHTTPFS)
+		data, err := StaticFS.ReadFile("static/index.html")
+		if err != nil {
+			c.String(http.StatusInternalServerError, "读取页面失败")
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
 	})
 	s.engine.GET("/settings.html", func(c *gin.Context) {
-		c.FileFromFS("settings.html", staticHTTPFS)
+		data, err := StaticFS.ReadFile("static/settings.html")
+		if err != nil {
+			c.String(http.StatusInternalServerError, "读取页面失败")
+			return
+		}
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
 	})
 
 	// API 路由
