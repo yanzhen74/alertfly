@@ -109,6 +109,7 @@
             { field: 'received_at', title: '时间', width: 170, templet: function (d) { return formatTime(d.received_at); } },
             { field: 'source', title: '来源', width: 80 },
             { field: 'level', title: '级别', width: 80, templet: function (d) { return levelHtml(d.level); } },
+            { field: 'subtype', title: '子类型', width: 100 },
             { field: 'title', title: '标题', minWidth: 180, templet: function (d) { return '<span class="cell-ellipsis" title="' + escapeHtml(d.title) + '">' + escapeHtml(d.title) + '</span>'; } },
             { field: 'mission', title: '任务', width: 120 },
             { field: 'sender', title: '发送者', width: 110 },
@@ -183,6 +184,7 @@
             ' &nbsp;|&nbsp; <strong>级别:</strong> ' + levelHtml(rowData.level) +
             ' &nbsp;|&nbsp; <strong>任务:</strong> ' + escapeHtml(rowData.mission || '-') +
             ' &nbsp;|&nbsp; <strong>发送者:</strong> ' + escapeHtml(rowData.sender || '-') +
+            ' &nbsp;|&nbsp; <strong>子类型:</strong> ' + escapeHtml(rowData.subtype || '-') +
             ' &nbsp;|&nbsp; <strong>时间:</strong> ' + formatTime(rowData.received_at) + '</p>' +
             '<pre>' + escapeHtml(tryFormatJson(rowData.content || '')) + '</pre>' +
             '</div></td>';
@@ -274,6 +276,9 @@
           storage_retention_days: (data.storage && data.storage.retention_days != null) ? String(data.storage.retention_days) : '',
           storage_max_records: (data.storage && data.storage.max_records != null) ? String(data.storage.max_records) : '',
           notifier_enabled: (data.notifier && data.notifier.enabled) ? true : false,
+          filter_missions: (data.filter && data.filter.missions) ? data.filter.missions.join(',') : '',
+          filter_senders: (data.filter && data.filter.senders) ? data.filter.senders.join(',') : '',
+          filter_subtypes: (data.filter && data.filter.subtypes) ? data.filter.subtypes.join(',') : '',
           updater_enabled: (data.updater && data.updater.enabled) ? true : false,
           updater_check_url: (data.updater && data.updater.check_url) || '',
           updater_interval: (data.updater && data.updater.interval != null) ? String(Math.round(data.updater.interval / 60000000000)) : ''
@@ -325,6 +330,11 @@
         },
         notifier: {
           enabled: data.notifier_enabled === 'on'
+        },
+        filter: {
+          missions: data.filter_missions ? data.filter_missions.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [],
+          senders: data.filter_senders ? data.filter_senders.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [],
+          subtypes: data.filter_subtypes ? data.filter_subtypes.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : []
         },
         updater: {
           enabled: data.updater_enabled === 'on',

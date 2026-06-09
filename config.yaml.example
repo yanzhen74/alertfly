@@ -40,3 +40,9 @@ updater:
 web:
   enabled: true                 # 是否启用 Web UI
   port: 18080                   # Web UI 监听端口
+
+# 接收过滤配置（控制弹窗通知，不影响消息存储）
+filter:
+  missions: []                  # 接收的任务名列表，空=全部接收（如 ["deploy", "backup"]）
+  senders: []                   # 接收的发送者列表，空=全部接收（如 ["ops", "dev"]）
+  subtypes: []                  # 接收的子类型列表，空=全部接收（如 ["deploy", "alert"]）

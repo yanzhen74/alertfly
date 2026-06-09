@@ -15,6 +15,7 @@ type Config struct {
 	Notifier NotifierConfig `yaml:"notifier" json:"notifier"`
 	Updater  UpdaterConfig  `yaml:"updater" json:"updater"`
 	Web      WebConfig      `yaml:"web" json:"web"`
+	Filter   FilterConfig   `yaml:"filter" json:"filter"`
 }
 
 // WebConfig Web UI 配置
@@ -60,6 +61,14 @@ type UpdaterConfig struct {
 	Enabled   bool          `yaml:"enabled" json:"enabled"`
 	CheckURL  string        `yaml:"check_url" json:"check_url"`
 	Interval  time.Duration `yaml:"interval" json:"interval"`
+}
+
+// FilterConfig 接收过滤配置，控制哪些消息弹窗通知
+// 空列表表示不过滤该维度（接收所有），不匹配的消息仍存储但不弹窗
+type FilterConfig struct {
+	Missions []string `yaml:"missions" json:"missions"` // 接收的任务名列表，空=全部
+	Senders  []string `yaml:"senders" json:"senders"`   // 接收的发送者列表，空=全部
+	SubTypes []string `yaml:"subtypes" json:"subtypes"` // 接收的子类型列表，空=全部
 }
 
 // LoadConfig 从 YAML 文件加载配置

@@ -46,6 +46,7 @@
                         <li class="layui-this">连接设置</li>
                         <li>存储设置</li>
                         <li>通知设置</li>
+                        <li>接收过滤</li>
                         <li>更新设置</li>
                     </ul>
                     <div class="layui-tab-content">
@@ -169,6 +170,34 @@
                                 <label class="layui-form-label">启用弹窗通知</label>
                                 <div class="layui-input-block">
                                     <input type="checkbox" name="notifier_enabled" lay-skin="switch" lay-text="开|关">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 接收过滤 -->
+                        <div class="layui-tab-item">
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">Mission（任务名）</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="filter_missions" placeholder="逗号分隔，如 deploy,backup" autocomplete="off" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">Sender（发送者）</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="filter_senders" placeholder="逗号分隔，如 ops,dev" autocomplete="off" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">SubType（子类型）</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="filter_subtypes" placeholder="逗号分隔，如 deploy,alert" autocomplete="off" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">说明</label>
+                                <div class="layui-input-block" style="padding-top:8px;color:#888;font-size:13px;line-height:1.8;">
+                                    留空表示接收所有，多个值用逗号分隔。<br>不匹配的消息仍会存储到数据库，仅不弹窗通知。<br>系统消息（如版本更新）不受过滤限制，始终弹窗。
                                 </div>
                             </div>
                         </div>

@@ -401,14 +401,18 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 				// 如果 Proxy 也解析失败，继续使用原始 msg
 			}
 
-			// 存入 Storage
+			// 存入 Storage（无论是否匹配过滤条件，始终存储）
 			if err := store.Save(msg); err != nil {
 				log.Printf("[main] 存储消息失败: %v", err)
 			}
 
-			// 通过异步通知器弹窗通知（含系统托盘通知，限流合并）
-			if err := nt.Notify(msg); err != nil {
-				log.Printf("[main] 发送通知失败: %v", err)
+			// 根据过滤条件决定是否弹窗通知
+			if shouldNotify(msg, &cfg.Filter) {
+				if err := nt.Notify(msg); err != nil {
+					log.Printf("[main] 发送通知失败: %v", err)
+				}
+			} else {
+				log.Printf("[main] 消息被过滤，不弹窗: [%s] %s", msg.Level, msg.Title)
 			}
 
 			// stdout 模式输出
@@ -478,4 +482,48 @@ func truncate(s string, maxRunes int) string {
 		return s
 	}
 	return string(runes[:maxRunes]) + "..."
+}
+
+// shouldNotify 判断消息是否应该弹窗通知
+// source 为 "system" 的消息始终弹窗，不受过滤限制
+// 空 filter 列表表示不过滤该维度（接收所有）
+// 非空列表时，消息对应字段必须在列表中（大小写不敏感）才弹窗
+func shouldNotify(msg *model.Message, filter *config.FilterConfig) bool {
+	// source 为 "system" 的消息（如版本更新事件）始终弹窗，不受过滤限制
+	if strings.EqualFold(msg.Source, "system") {
+		return true
+	}
+
+	// Missions 过滤
+	if len(filter.Missions) > 0 {
+		if !matchList(msg.Mission, filter.Missions) {
+			return false
+		}
+	}
+
+	// Senders 过滤
+	if len(filter.Senders) > 0 {
+		if !matchList(msg.Sender, filter.Senders) {
+			return false
+		}
+	}
+
+	// SubTypes 过滤
+	if len(filter.SubTypes) > 0 {
+		if !matchList(msg.SubType, filter.SubTypes) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// matchList 检查 value 是否在 list 中（大小写不敏感）
+func matchList(value string, list []string) bool {
+	for _, item := range list {
+		if strings.EqualFold(value, item) {
+			return true
+		}
+	}
+	return false
 }
