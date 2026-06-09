@@ -27,7 +27,7 @@ type AsyncNotifier struct {
 }
 
 const (
-	defaultMinGap   = 1 * time.Second  // 两次通知最小间隔
+	defaultMinGap   = 200 * time.Millisecond // 两次通知最小间隔
 	defaultMaxBatch = 3                 // 积压超过 3 条时合并
 	defaultChanSize = 100               // channel 缓冲区大小
 )
@@ -76,6 +76,9 @@ func (a *AsyncNotifier) Notify(msg *model.Message) error {
 // NotifyError 错误通知直接转发到 inner，不限流、不入队。
 // 系统错误通知需要立即展示，不参与限流逻辑。
 func (a *AsyncNotifier) NotifyError(title, body string) error {
+	if a.trayNotify != nil {
+		a.trayNotify(title, body)
+	}
 	return a.inner.NotifyError(title, body)
 }
 

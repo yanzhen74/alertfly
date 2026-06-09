@@ -4,14 +4,18 @@
 
 ## 功能特性
 
-- 支持 Redis（PubSub/Stream）和 Kafka（Consumer Group）消息消费
-- Proxy 消息适配层，可扩展对接不同系统
+- 支持 Redis（PubSub/Stream）和 Kafka（Consumer Group）双消息源并行消费
+- Proxy 消息适配层，可扩展对接不同系统（Jenkins/Prometheus/Zabbix 等）
 - SQLite 本地持久化，支持分页过滤查询
 - 跨平台桌面弹窗通知（不抢夺焦点）
-- 连接异常弹窗警告
-- 软件自更新（HTTP 轮询 + SHA256 校验 + 静默替换 + 自动重启）
-- 内嵌 Web UI（Gin + Layui）：历史消息查看、配置管理
-- Windows 系统托盘图标 + 气泡通知（兼容 Win7）
+  - Linux：notify-send
+  - Windows：Shell_NotifyIconW Balloon Tip（兼容 Win7）
+- 异步通知 + 限流合并（密集告警自动合并摘要）
+- 连接异常弹窗警告（消费者断连自动提醒）
+- 软件自更新（HTTP 轮询 + SHA256 校验 + 静默替换）
+- 内嵌 Web UI（Gin + Layui）：历史消息查看、配置管理、立即检查更新
+- Windows 系统托盘图标 + 右键菜单
+- 版本更新等重要事件自动记录到告警历史
 - 支持 Ubuntu（X11/Wayland）和 Windows 7/10/11
 
 ## 快速开始
@@ -19,12 +23,20 @@
 ### 编译
 
 ```bash
-# Linux
-go build -mod=vendor -o alertfly ./cmd/alertfly/
+# 一键编译 Linux + Windows
+./build.sh all
 
-# Windows（交叉编译）
-GOOS=windows GOARCH=amd64 go build -mod=vendor -o alertfly.exe ./cmd/alertfly/
+# 指定版本号编译
+./build.sh all 0.3.0
+
+# 单独编译 Linux
+./build.sh linux
+
+# 单独编译 Windows（需要 mingw-w64 交叉编译工具链）
+./build.sh windows
 ```
+
+编译产物在 `build/` 目录，同时自动更新 `update-server/version.json`。
 
 ### 运行
 
@@ -49,6 +61,29 @@ GOOS=windows GOARCH=amd64 go build -mod=vendor -o alertfly.exe ./cmd/alertfly/
 - SQLite 存储路径与保留策略
 - 自更新开关与轮询地址
 - 通知开关
+
+## 手动发送报警
+
+`scripts/` 目录下提供了手动发送报警的脚本（不依赖 Go 环境）：
+
+```bash
+# 首次使用，复制配置模板
+cp scripts/send_alert.user.example scripts/send_alert.user
+
+# 编辑 Redis 连接等配置
+vim scripts/send_alert.user
+
+# 发送报警（Linux）
+./scripts/send_alert.sh "CPU过高" "使用率达95%"
+./scripts/send_alert.sh "磁盘告警" "空间不足" error
+
+# Windows
+scripts\send_alert.bat "服务异常" "API超时"
+```
+
+## 二次开发
+
+通过 Proxy 适配器可对接自有业务系统的消息格式，详见 [doc/DEVELOP.md](doc/DEVELOP.md)。
 
 ## 自更新配置
 
@@ -131,11 +166,20 @@ alertfly/
 ├── internal/
 │   ├── config/                -- 配置加载
 │   ├── consumer/              -- Redis/Kafka 消费者
-│   ├── proxy/                 -- 消息适配层
+│   ├── proxy/                 -- 消息适配层（可扩展）
 │   ├── model/                 -- 数据模型
 │   ├── storage/               -- SQLite 存储
-│   ├── notifier/              -- 跨平台弹窗通知
-│   └── updater/               -- 自更新模块
+│   ├── notifier/              -- 跨平台弹窗通知（异步+限流）
+│   ├── tray/                  -- 系统托盘（Windows）
+│   ├── updater/               -- 自更新模块
+│   └── web/                   -- 内嵌 Web UI
+├── scripts/                   -- 工具脚本（mock测试、手动发送等）
+├── update-server/             -- 自更新服务端
+├── doc/                       -- 文档
+│   ├── BUILD.md               -- 编译指南
+│   ├── DEVELOP.md             -- 二开说明
+│   └── require.md             -- 需求文档
+├── build.sh                   -- 一键编译脚本
 ├── config.yaml.example        -- 配置示例
 ├── go.mod
 └── go.sum
