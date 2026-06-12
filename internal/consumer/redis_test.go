@@ -380,6 +380,173 @@ func TestRedisConsumerChannels(t *testing.T) {
 	_ = errCh // errCh 类型为 <-chan error，正确
 }
 
+// ---------- TestIsPattern ----------
+
+func TestIsPattern(t *testing.T) {
+	tests := []struct {
+		channel string
+		want    bool
+	}{
+		{"alerts", false},
+		{"alert:deploy:crm:timeout:error", false},
+		{"alert:*:*:*:*", true},
+		{"alert:*:crm:*:critical", true},
+		{"alert?:info", true},
+		{"alert[0-9]", true},
+	}
+
+	for _, tt := range tests {
+		got := isPattern(tt.channel)
+		if got != tt.want {
+			t.Errorf("isPattern(%q) = %v, want %v", tt.channel, got, tt.want)
+		}
+	}
+}
+
+// ---------- TestExtractFromChannel ----------
+
+func TestExtractFromChannel(t *testing.T) {
+	tests := []struct {
+		channel           string
+		wantMission       string
+		wantSender        string
+		wantSubtype       string
+		wantLevel         string
+	}{
+		{"alert:deploy:crm:timeout:error", "deploy", "crm", "timeout", "error"},
+		{"alert:backup:erp:disk-full:critical", "backup", "erp", "disk-full", "critical"},
+		{"alert:monitor:gateway:cpu-high:warning", "monitor", "gateway", "cpu-high", "warning"},
+		{"alerts", "", "", "", ""},             // 不符合格式
+		{"alert:deploy:crm", "", "", "", ""},     // 段数不足
+		{"other:deploy:crm:timeout:error", "", "", "", ""}, // 前缀不是 alert
+	}
+
+	for _, tt := range tests {
+		mission, sender, subtype, level := extractFromChannel(tt.channel)
+		if mission != tt.wantMission {
+			t.Errorf("extractFromChannel(%q) mission = %q, want %q", tt.channel, mission, tt.wantMission)
+		}
+		if sender != tt.wantSender {
+			t.Errorf("extractFromChannel(%q) sender = %q, want %q", tt.channel, sender, tt.wantSender)
+		}
+		if subtype != tt.wantSubtype {
+			t.Errorf("extractFromChannel(%q) subtype = %q, want %q", tt.channel, subtype, tt.wantSubtype)
+		}
+		if level != tt.wantLevel {
+			t.Errorf("extractFromChannel(%q) level = %q, want %q", tt.channel, level, tt.wantLevel)
+		}
+	}
+}
+
+// ---------- TestParseMessageWithChannelExtraction ----------
+
+func TestParseMessageWithChannelExtraction(t *testing.T) {
+	c := newTestRedisConsumer("pubsub")
+
+	// JSON 中没有 mission/sender/subtype/level，应从 channel 名称提取
+	payload := `{"title":"CPU使用率过高","content":"CPU使用率95%"}`
+	msg := c.parseMessage(payload, "alert:deploy:crm:timeout:error")
+
+	if msg.Mission != "deploy" {
+		t.Errorf("expected Mission=deploy (from channel), got %q", msg.Mission)
+	}
+	if msg.Sender != "crm" {
+		t.Errorf("expected Sender=crm (from channel), got %q", msg.Sender)
+	}
+	if msg.SubType != "timeout" {
+		t.Errorf("expected SubType=timeout (from channel), got %q", msg.SubType)
+	}
+	if msg.Level != "error" {
+		t.Errorf("expected Level=error (from channel), got %q", msg.Level)
+	}
+	if msg.Topic != "alert:deploy:crm:timeout:error" {
+		t.Errorf("expected Topic=alert:deploy:crm:timeout:error, got %q", msg.Topic)
+	}
+}
+
+func TestParseMessageChannelExtractionJSONPriority(t *testing.T) {
+	c := newTestRedisConsumer("pubsub")
+
+	// JSON 中有 mission/sender/subtype/level，应优先使用 JSON 中的值
+	payload := `{"title":"磁盘告警","content":"磁盘已满","mission":"backup","sender":"erp","subtype":"disk-full","level":"critical"}`
+	msg := c.parseMessage(payload, "alert:deploy:crm:timeout:error")
+
+	if msg.Mission != "backup" {
+		t.Errorf("expected Mission=backup (from JSON, not channel), got %q", msg.Mission)
+	}
+	if msg.Sender != "erp" {
+		t.Errorf("expected Sender=erp (from JSON, not channel), got %q", msg.Sender)
+	}
+	if msg.SubType != "disk-full" {
+		t.Errorf("expected SubType=disk-full (from JSON, not channel), got %q", msg.SubType)
+	}
+	if msg.Level != "critical" {
+		t.Errorf("expected Level=critical (from JSON, not channel), got %q", msg.Level)
+	}
+}
+
+func TestParseMessageChannelExtractionPartialJSON(t *testing.T) {
+	c := newTestRedisConsumer("pubsub")
+
+	// JSON 中只有部分字段，缺失的从 channel 名称提取
+	payload := `{"title":"CPU过高","content":"CPU 95%","mission":"monitor"}`
+	msg := c.parseMessage(payload, "alert:deploy:crm:timeout:error")
+
+	if msg.Mission != "monitor" {
+		t.Errorf("expected Mission=monitor (from JSON), got %q", msg.Mission)
+	}
+	if msg.Sender != "crm" {
+		t.Errorf("expected Sender=crm (from channel, JSON missing), got %q", msg.Sender)
+	}
+	if msg.SubType != "timeout" {
+		t.Errorf("expected SubType=timeout (from channel, JSON missing), got %q", msg.SubType)
+	}
+	if msg.Level != "error" {
+		t.Errorf("expected Level=error (from channel, JSON missing), got %q", msg.Level)
+	}
+}
+
+func TestParseMessageChannelExtractionNonAlertFormat(t *testing.T) {
+	c := newTestRedisConsumer("pubsub")
+
+	// channel 不符合 alert:x:x:x:x 格式，不从 channel 提取
+	payload := `{"title":"测试","content":"内容"}`
+	msg := c.parseMessage(payload, "my-alerts")
+
+	if msg.Mission != "" {
+		t.Errorf("expected Mission empty (no extraction from non-alert channel), got %q", msg.Mission)
+	}
+	if msg.Sender != "" {
+		t.Errorf("expected Sender empty, got %q", msg.Sender)
+	}
+	if msg.SubType != "" {
+		t.Errorf("expected SubType empty, got %q", msg.SubType)
+	}
+	if msg.Level != "" {
+		t.Errorf("expected Level empty, got %q", msg.Level)
+	}
+}
+
+func TestParseMessageChannelExtractionRawMessage(t *testing.T) {
+	c := newTestRedisConsumer("pubsub")
+
+	// 非 JSON 消息，仍从 channel 提取元数据
+	msg := c.parseMessage("plain text alert", "alert:deploy:crm:timeout:error")
+
+	if msg.Title != "Raw Message" {
+		t.Errorf("expected Title='Raw Message', got %q", msg.Title)
+	}
+	if msg.Mission != "deploy" {
+		t.Errorf("expected Mission=deploy (from channel), got %q", msg.Mission)
+	}
+	if msg.Sender != "crm" {
+		t.Errorf("expected Sender=crm (from channel), got %q", msg.Sender)
+	}
+	if msg.Level != "error" {
+		t.Errorf("expected Level=error (from channel), got %q", msg.Level)
+	}
+}
+
 func TestRedisConsumerClose(t *testing.T) {
 	cfg := &config.RedisConfig{
 		Addr:    "localhost:6379",

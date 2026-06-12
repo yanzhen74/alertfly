@@ -8,6 +8,8 @@ redis:
   password: ""                  # Redis 密码，无密码留空
   db: 0                         # Redis 数据库编号
   channel: "alerts"             # Pub/Sub 模式的 channel 名称
+  # channel: "alert:*:*:*:*"     # 模式匹配：接收所有报警（PSUBSCRIBE）
+  # channel: "alert:*:crm:*:critical"  # 模式匹配：CRM系统严重报警
   stream: "alert_stream"        # Stream 模式的 stream 名称
   consumer_group: "alertfly_group" # Stream 模式的 Consumer Group 名称
   mode: "pubsub"                # 消费模式：pubsub（Pub/Sub）或 stream（Stream）
@@ -15,10 +17,19 @@ redis:
 # Kafka 配置
 kafka:
   enabled: false                # 是否启用 Kafka 消费者
+  version: "2.0.0"              # Kafka broker 版本（如 "0.10.0.0", "1.0.0", "2.0.0"）
   brokers:                      # Kafka broker 地址列表
     - "localhost:9092"
-  topic: "alerts"               # Kafka topic 名称
+  # 订阅 topic，支持精确名称和正则匹配
+  topics:                       # 多 topic 订阅（推荐）
+    - "alert-events"                        # 精确订阅
+    # - "regex:alert-.*"                    # 正则：所有 alert- 前缀的 topic
+    # - "regex:^(deploy|monitor)-alerts$"   # 正则：指定前缀的 alerts topic
+    # - "regex:alert\\..*"                  # 正则：订阅所有 alert topic
+    # - "!regex:alert\\.deploy\\..*"        # 排除：排除 deploy 任务的报警
+  # topic: "alerts"              # 单 topic 订阅（向后兼容，与 topics 二选一）
   group_id: "alertfly_group"    # Kafka Consumer Group ID
+  topic_scan_interval: 30       # 正则 topic 扫描间隔（秒），默认 30
 
 # 本地存储配置
 storage:

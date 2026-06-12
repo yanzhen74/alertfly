@@ -38,10 +38,13 @@ type RedisConfig struct {
 
 // KafkaConfig Kafka 连接配置
 type KafkaConfig struct {
-	Enabled bool     `yaml:"enabled" json:"enabled"`
-	Brokers []string `yaml:"brokers" json:"brokers"`
-	Topic   string   `yaml:"topic" json:"topic"`
-	GroupID string   `yaml:"group_id" json:"group_id"`
+	Enabled           bool     `yaml:"enabled" json:"enabled"`
+	Brokers           []string `yaml:"brokers" json:"brokers"`
+	Topic             string   `yaml:"topic" json:"topic"`              // 单 topic 配置（向后兼容）
+	Topics            []string `yaml:"topics" json:"topics"`            // 多 topic 配置，支持 regex: 前缀正则
+	GroupID           string   `yaml:"group_id" json:"group_id"`
+	TopicScanInterval int      `yaml:"topic_scan_interval" json:"topic_scan_interval"` // topic 正则扫描间隔（秒），默认 30
+	Version           string   `yaml:"version" json:"version"`          // Kafka broker 版本，默认 "2.0.0"
 }
 
 // StorageConfig 本地存储配置
@@ -81,6 +84,11 @@ func LoadConfig(path string) (*Config, error) {
 	cfg := &Config{}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
+	}
+
+	// 向后兼容：如果使用旧的单 topic 配置，自动迁移到 topics 列表
+	if cfg.Kafka.Topic != "" && len(cfg.Kafka.Topics) == 0 {
+		cfg.Kafka.Topics = []string{cfg.Kafka.Topic}
 	}
 
 	return cfg, nil

@@ -48,14 +48,16 @@ const (
 	EventCheckFailed                      // 版本检查失败
 	EventUpdateSuccess                    // 版本更新成功
 	EventUpdateFailed                     // 版本更新失败
+	EventCheckRecovered                   // 版本检查恢复正常
 )
 
 // Event 更新事件
 type Event struct {
-	Kind    EventKind // 事件类型
-	Version string    // 新版本号（发现新版本/更新成功时有值）
-	URL     string    // 下载地址（发现新版本时有值）
-	Err     error     // 错误信息（检查失败/更新失败时有值）
+	Kind      EventKind // 事件类型
+	Version   string    // 新版本号（发现新版本/更新成功时有值）
+	URL       string    // 下载地址（发现新版本时有值）
+	Err       error     // 错误信息（检查失败/更新失败时有值）
+	FailCount int       // 连续失败次数（用于 EventCheckRecovered）
 }
 
 // EventRecorder 更新事件记录回调
@@ -76,6 +78,11 @@ type Updater struct {
 	notifyError    ErrorNotifier
 	recordEvent    EventRecorder
 	client         *http.Client
+
+	// 失败抑制相关（仅 Start() 定时循环中使用，无需加锁）
+	consecutiveFailures int       // 连续失败次数
+	lastFailureErr      string    // 上次失败的错误信息
+	lastRecordedAt      time.Time // 上次记录到数据库的时间
 }
 
 // NewUpdater 创建更新器
@@ -103,11 +110,10 @@ func (u *Updater) Start(ctx context.Context) {
 	go func() {
 		// 启动时立即检查一次
 		result := u.CheckAndUpdate()
-		if result.Err != nil {
-			log.Printf("[updater] 启动时检查更新失败: %v", result.Err)
-		}
+		u.handleCheckResult(result)
 
-		ticker := time.NewTicker(u.cfg.Interval)
+		currentInterval := u.cfg.Interval
+		ticker := time.NewTicker(currentInterval)
 		defer ticker.Stop()
 
 		for {
@@ -117,12 +123,71 @@ func (u *Updater) Start(ctx context.Context) {
 				return
 			case <-ticker.C:
 				result := u.CheckAndUpdate()
-				if result.Err != nil {
-					log.Printf("[updater] 定时检查更新失败: %v", result.Err)
+				u.handleCheckResult(result)
+
+				// 指数退避：检查是否需要调整间隔
+				newInterval := u.backoffInterval()
+				if newInterval != currentInterval {
+					currentInterval = newInterval
+					ticker.Reset(currentInterval)
+					log.Printf("[updater] 退避调整检查间隔为 %v", currentInterval)
 				}
 			}
 		}
 	}()
+}
+
+// maxBackoffInterval 指数退避上限
+const maxBackoffInterval = 24 * time.Hour
+
+// handleCheckResult 处理检查结果，应用连续失败抑制逻辑
+// 仅在 Start() 的定时循环中调用（手动检查不经过此方法，始终记录）
+func (u *Updater) handleCheckResult(result *CheckResult) {
+	if result.Err != nil {
+		// 检查失败
+		errStr := result.Err.Error()
+		if u.consecutiveFailures == 0 || u.lastFailureErr != errStr {
+			// 第1次失败 或 错误类型变化 → 正常记录
+			u.consecutiveFailures++
+			u.lastFailureErr = errStr
+			u.lastRecordedAt = time.Now()
+			if u.recordEvent != nil {
+				u.recordEvent(Event{Kind: EventCheckFailed, Err: result.Err, FailCount: u.consecutiveFailures})
+			}
+		} else {
+			// 连续相同失败 → 只写 log，不触发 recordEvent
+			u.consecutiveFailures++
+			log.Printf("[updater] 版本检查连续失败 %d 次（相同错误），抑制记录: %v", u.consecutiveFailures, result.Err)
+		}
+	} else {
+		// 检查成功
+		if u.consecutiveFailures > 0 {
+			// 之前有连续失败，现在恢复了 → 记录恢复事件
+			if u.recordEvent != nil {
+				u.recordEvent(Event{Kind: EventCheckRecovered, FailCount: u.consecutiveFailures})
+			}
+			log.Printf("[updater] 版本检查恢复正常，之前连续失败 %d 次", u.consecutiveFailures)
+			u.consecutiveFailures = 0
+			u.lastFailureErr = ""
+		}
+	}
+}
+
+// backoffInterval 根据连续失败次数计算退避间隔
+// 公式：interval * 2^(failures-1)，上限 24h
+// 连续失败为 0 时返回原始间隔
+func (u *Updater) backoffInterval() time.Duration {
+	if u.consecutiveFailures == 0 {
+		return u.cfg.Interval
+	}
+	backoff := u.cfg.Interval
+	for i := 1; i < u.consecutiveFailures; i++ {
+		backoff *= 2
+		if backoff >= maxBackoffInterval {
+			return maxBackoffInterval
+		}
+	}
+	return backoff
 }
 
 // CheckAndUpdate 立即检查并执行更新
@@ -133,9 +198,7 @@ func (u *Updater) CheckAndUpdate() *CheckResult {
 	info, err := u.fetchVersionInfo()
 	if err != nil {
 		u.notifyError("更新检查失败", fmt.Sprintf("无法获取远程版本信息: %v", err))
-		if u.recordEvent != nil {
-			u.recordEvent(Event{Kind: EventCheckFailed, Err: err})
-		}
+		// 注意：EventCheckFailed 不在此处记录，由调用方（Start 的 handleCheckResult）决定是否抑制
 		return &CheckResult{Err: err}
 	}
 

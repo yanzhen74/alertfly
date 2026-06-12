@@ -174,6 +174,10 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 			msg.Level = "error"
 			msg.Title = "版本更新失败"
 			msg.Content = event.Err.Error()
+		case updater.EventCheckRecovered:
+			msg.Level = "info"
+			msg.Title = "版本检查恢复正常"
+			msg.Content = fmt.Sprintf("之前连续失败 %d 次，现已恢复", event.FailCount)
 		}
 
 		if saveErr := store.Save(msg); saveErr != nil {
@@ -226,6 +230,10 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 			log.Println("[main] Updater 动态初始化完成")
 		}
 		result := ud.CheckAndUpdate()
+		// 手动触发不受抑制影响，始终记录检查失败事件
+		if result.Err != nil && !result.HasUpdate {
+			recordUpdateEvent(updater.Event{Kind: updater.EventCheckFailed, Err: result.Err})
+		}
 		errMsg := ""
 		if result.Err != nil {
 			errMsg = result.Err.Error()

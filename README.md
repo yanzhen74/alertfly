@@ -187,6 +187,15 @@ alertfly/
 
 ## 更新日志
 
+### v0.2.5
+
+- **新增**：Redis PSUBSCRIBE 模式匹配订阅（channel 含通配符时自动切换，从 channel 名称自动提取元数据）
+- **新增**：Kafka 正则 topic 订阅（`regex:` 前缀）+ 排除规则（`!regex:` 前缀）
+- **新增**：Kafka topic 定期扫描（默认 30 秒，带缓存降级，可配置 `topic_scan_interval`）
+- **新增**：Kafka broker 版本可配置化（支持 0.10.0+，默认 2.0.0）
+- **说明**：Redis/Kafka 话题命名规范（四段式：任务.发送者.报警类别.报警级别）
+- **优化**：版本检查失败抑制 + 指数退避（连续相同失败只记第一条，间隔翻倍上限 24h）
+
 ### v0.2.4
 
 - **新增**：设置页面「接收过滤」功能（可按 Mission/Sender/SubType 过滤弹窗通知）

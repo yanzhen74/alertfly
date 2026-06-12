@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"strings"
 	"sync"
 	"time"
-
-	"strings"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/oliverxu/alertfly/internal/config"
@@ -99,8 +99,20 @@ func (c *RedisConsumer) Close() error {
 
 // ---------- PubSub 模式 ----------
 
+// isPattern 判断 channel 是否包含通配符，用于决定使用 PSubscribe 还是 Subscribe
+func isPattern(channel string) bool {
+	return strings.ContainsAny(channel, "*?[")
+}
+
 func (c *RedisConsumer) consumePubSub(ctx context.Context) {
 	backoff := time.Second
+	pattern := isPattern(c.cfg.Channel)
+
+	if pattern {
+		log.Printf("[redis] 使用模式匹配订阅: %s", c.cfg.Channel)
+	} else {
+		log.Printf("[redis] 使用精确订阅: %s", c.cfg.Channel)
+	}
 
 	for {
 		select {
@@ -109,7 +121,12 @@ func (c *RedisConsumer) consumePubSub(ctx context.Context) {
 		default:
 		}
 
-		sub := c.client.Subscribe(ctx, c.cfg.Channel)
+		var sub *redis.PubSub
+		if pattern {
+			sub = c.client.PSubscribe(ctx, c.cfg.Channel)
+		} else {
+			sub = c.client.Subscribe(ctx, c.cfg.Channel)
+		}
 		_, err := sub.Receive(ctx)
 		if err != nil {
 			c.errCh <- fmt.Errorf("pubsub subscribe error: %w", err)
@@ -135,7 +152,7 @@ func (c *RedisConsumer) consumePubSub(ctx context.Context) {
 					backoff = c.reconnectBackoff(backoff, ctx)
 					goto pubsubReconnect
 				}
-				c.msgCh <- c.parseMessage(msg.Payload, c.cfg.Channel)
+				c.msgCh <- c.parseMessage(msg.Payload, msg.Channel)
 			}
 		}
 
@@ -208,7 +225,18 @@ func (c *RedisConsumer) ensureConsumerGroup(ctx context.Context) error {
 
 // ---------- 消息解析 ----------
 
+// extractFromChannel 从 channel 名称中提取元数据（如果符合 alert:x:x:x:x 格式）
+// 返回 mission, sender, subtype, level；不符合格式时均返回空字符串
+func extractFromChannel(channel string) (mission, sender, subtype, level string) {
+	parts := strings.Split(channel, ":")
+	if len(parts) == 5 && parts[0] == "alert" {
+		return parts[1], parts[2], parts[3], parts[4]
+	}
+	return "", "", "", ""
+}
+
 // parseMessage 将 PubSub 收到的 payload 解析为 Message
+// topic 为实际匹配到的 channel 名称（PSubscribe 时为 msg.Channel，Subscribe 时也相同）
 func (c *RedisConsumer) parseMessage(payload string, topic string) *model.Message {
 	msg := &model.Message{
 		Source:     "redis",
@@ -220,6 +248,22 @@ func (c *RedisConsumer) parseMessage(payload string, topic string) *model.Messag
 		// JSON 解析失败，将原始数据放入 Content，Title 设为 "Raw Message"
 		msg.Title = "Raw Message"
 		msg.Content = payload
+	}
+
+	// 从 channel 名称中提取元数据（如果符合 alert:x:x:x:x 格式）
+	// JSON 中的字段优先，只有 JSON 中没有的字段才从 channel 名称提取
+	mission, sender, subtype, level := extractFromChannel(topic)
+	if msg.Mission == "" {
+		msg.Mission = mission
+	}
+	if msg.Sender == "" {
+		msg.Sender = sender
+	}
+	if msg.SubType == "" {
+		msg.SubType = subtype
+	}
+	if msg.Level == "" {
+		msg.Level = level
 	}
 
 	return msg
