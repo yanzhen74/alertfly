@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -192,6 +193,21 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 	}
 
 	// --- 初始化 Updater（自更新）---
+	// 检查是否存在 .version 文件（由 updater 更新成功后写入）
+	// 如果存在，用文件中的版本号覆盖编译时版本号，避免重复更新
+	if exePath, err := os.Executable(); err == nil {
+		if resolved, err := filepath.EvalSymlinks(exePath); err == nil {
+			exePath = resolved
+		}
+		versionFile := filepath.Join(filepath.Dir(exePath), ".version")
+		if data, err := os.ReadFile(versionFile); err == nil {
+			v := strings.TrimSpace(string(data))
+			if v != "" {
+				log.Printf("[main] 检测到更新标记，版本号 %s → %s", version, v)
+				version = v
+			}
+		}
+	}
 	var ud *updater.Updater
 	if cfg.Updater.CheckURL != "" {
 		udCfg := updater.Config{

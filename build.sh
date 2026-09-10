@@ -18,7 +18,20 @@ export PATH=$PATH:/usr/local/go/bin
 if [ -n "$2" ]; then
     VERSION="$2"
 else
-    VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+    # 如果正好在 tag 上，使用 tag 版本；否则基于最新 tag 递增 patch
+    EXACT_TAG=$(git describe --tags --exact-match 2>/dev/null || true)
+    if [ -n "$EXACT_TAG" ]; then
+        VERSION="$EXACT_TAG"
+    else
+        LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
+        # 去掉 v 前缀，提取 major.minor.patch
+        CLEAN_TAG=$(echo "${LATEST_TAG}" | sed 's/^[vV]//')
+        MAJOR=$(echo "${CLEAN_TAG}" | cut -d. -f1)
+        MINOR=$(echo "${CLEAN_TAG}" | cut -d. -f2)
+        PATCH=$(echo "${CLEAN_TAG}" | cut -d. -f3)
+        PATCH=$((PATCH + 1))
+        VERSION="${MAJOR}.${MINOR}.${PATCH}-dev"
+    fi
 fi
 # 去掉 v 前缀用于 version.json
 VERSION_CLEAN=$(echo "${VERSION}" | sed 's/^[vV]//')

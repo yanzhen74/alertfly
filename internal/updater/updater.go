@@ -251,6 +251,9 @@ func (u *Updater) CheckAndUpdate() *CheckResult {
 
 	log.Printf("[updater] 更新完成，即将重启至版本 %s", info.Version)
 
+	// 将新版本号写入 .version 文件，供下次启动时读取
+	u.writeVersionFile(info.Version)
+
 	if u.recordEvent != nil {
 		u.recordEvent(Event{Kind: EventUpdateSuccess, Version: info.Version})
 	}
@@ -493,6 +496,27 @@ func (u *Updater) restart() {
 func (u *Updater) cleanupTmp(path string) {
 	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 		log.Printf("[updater] 清理临时文件失败: %v", err)
+	}
+}
+
+// writeVersionFile 将新版本号写入 .version 文件。
+// 下次启动时 main.go 读取此文件，覆盖编译时版本号，避免重复更新。
+func (u *Updater) writeVersionFile(newVersion string) {
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Printf("[updater] 写入版本文件失败: %v", err)
+		return
+	}
+	exePath, err = filepath.EvalSymlinks(exePath)
+	if err != nil {
+		log.Printf("[updater] 写入版本文件失败: %v", err)
+		return
+	}
+	versionFile := filepath.Join(filepath.Dir(exePath), ".version")
+	if err := os.WriteFile(versionFile, []byte(newVersion), 0644); err != nil {
+		log.Printf("[updater] 写入版本文件失败: %v", err)
+	} else {
+		log.Printf("[updater] 已写入版本文件: %s → %s", versionFile, newVersion)
 	}
 }
 
