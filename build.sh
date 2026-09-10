@@ -55,7 +55,7 @@ mkdir -p ${BUILD_DIR}
 update_version_json() {
     local field="$1"
     local value="$2"
-    sed -i "s/\"${field}\": *\"[^\"]*\"/\"${field}\": \"${value}\"/" "${VERSION_JSON}"
+    sed -i "s|\"${field}\": *\"[^\"]*\"|\"${field}\": \"${value}\"|" "${VERSION_JSON}"
 }
 
 build_linux() {
