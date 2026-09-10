@@ -7,7 +7,7 @@ redis:
   addr: "localhost:6379"        # Redis 服务地址
   password: ""                  # Redis 密码，无密码留空
   db: 0                         # Redis 数据库编号
-  channel: "alerts"             # Pub/Sub 模式的 channel 名称
+  channel: "alert:*"             # Pub/Sub 模式的 channel 名称
   # channel: "alert:*:*:*:*"     # 模式匹配：接收所有报警（PSUBSCRIBE）
   # channel: "alert:*:crm:*:critical"  # 模式匹配：CRM系统严重报警
   stream: "alert_stream"        # Stream 模式的 stream 名称
@@ -27,7 +27,7 @@ kafka:
     # - "regex:^(deploy|monitor)-alerts$"   # 正则：指定前缀的 alerts topic
     # - "regex:alert\\..*"                  # 正则：订阅所有 alert topic
     # - "!regex:alert\\.deploy\\..*"        # 排除：排除 deploy 任务的报警
-  # topic: "alerts"              # 单 topic 订阅（向后兼容，与 topics 二选一）
+  # topic: "alert"              # 单 topic 订阅（向后兼容，与 topics 二选一）
   group_id: "alertfly_group"    # Kafka Consumer Group ID
   topic_scan_interval: 30       # 正则 topic 扫描间隔（秒），默认 30
 
@@ -40,6 +40,8 @@ storage:
 # 桌面通知配置
 notifier:
   enabled: true                 # 是否启用桌面弹窗通知
+  sound_level: ""               # 触发声音报警的最低级别：warn / error，空=不发声
+  sound_file: ""                # 自定义声音文件路径（WAV 格式），空=使用内嵌声音
 
 # 自动更新检查配置
 updater:

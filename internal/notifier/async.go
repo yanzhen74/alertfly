@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/oliverxu/alertfly/internal/model"
+	"github.com/oliverxu/alertfly/internal/sound"
 )
 
 // AsyncNotifier 异步通知包装器，带限流和合并能力。
@@ -24,6 +25,8 @@ type AsyncNotifier struct {
 	done       chan struct{}                  // goroutine 退出确认
 	mu         sync.Mutex                    // 保护 closed 字段
 	closed     bool                          // 是否已关闭
+	soundLevel int                           // 触发声音报警的最低级别优先级，0=不发声
+	soundFile  string                        // 自定义声音文件路径，空=使用内嵌声音
 }
 
 const (
@@ -34,7 +37,9 @@ const (
 
 // NewAsyncNotifier 创建异步通知包装器。
 // trayNotify 为系统托盘通知回调，可为 nil（仅使用 inner 通知器）。
-func NewAsyncNotifier(inner Notifier, trayNotify func(title, content string)) *AsyncNotifier {
+// soundLevel 为触发声音的最低级别（"warn"/"error"），空字符串表示不发声。
+// soundFile 为自定义声音文件路径，空字符串表示使用内嵌声音。
+func NewAsyncNotifier(inner Notifier, trayNotify func(title, content string), soundLevel, soundFile string) *AsyncNotifier {
 	return &AsyncNotifier{
 		inner:      inner,
 		trayNotify: trayNotify,
@@ -43,6 +48,8 @@ func NewAsyncNotifier(inner Notifier, trayNotify func(title, content string)) *A
 		maxBatch:   defaultMaxBatch,
 		stopCh:     make(chan struct{}),
 		done:       make(chan struct{}),
+		soundLevel: levelPriority(soundLevel),
+		soundFile:  soundFile,
 	}
 }
 
@@ -150,6 +157,7 @@ func (a *AsyncNotifier) processLoop(appCtx context.Context) {
 				if a.trayNotify != nil {
 					a.trayNotify(summary.Title, summary.Content)
 				}
+				a.maybePlaySound(summary.Level)
 				log.Printf("[notifier] 合并 %d 条消息为摘要通知（最高级别: %s）",
 					len(batch), summary.Level)
 			} else {
@@ -161,6 +169,7 @@ func (a *AsyncNotifier) processLoop(appCtx context.Context) {
 				if a.trayNotify != nil {
 					a.trayNotify(msg.Title, msg.Content)
 				}
+				a.maybePlaySound(msg.Level)
 			}
 
 			lastNotify = time.Now()
@@ -182,6 +191,30 @@ func (a *AsyncNotifier) createSummary(batch []*model.Message) *model.Message {
 		Content:    content,
 		Source:     "system",
 		ReceivedAt: time.Now(),
+	}
+}
+
+// maybePlaySound 当消息级别达到阈值时，异步播放声音报警。
+func (a *AsyncNotifier) maybePlaySound(level string) {
+	if a.soundLevel <= 0 {
+		return
+	}
+	if levelPriority(level) >= a.soundLevel {
+		go sound.Play(a.soundFile)
+	}
+}
+
+// levelPriority 返回级别的数字优先级，用于比较。
+func levelPriority(level string) int {
+	switch strings.ToLower(level) {
+	case "error":
+		return 3
+	case "warn":
+		return 2
+	case "info":
+		return 1
+	default:
+		return 0
 	}
 }
 

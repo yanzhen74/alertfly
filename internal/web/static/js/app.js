@@ -276,6 +276,8 @@
           storage_retention_days: (data.storage && data.storage.retention_days != null) ? String(data.storage.retention_days) : '',
           storage_max_records: (data.storage && data.storage.max_records != null) ? String(data.storage.max_records) : '',
           notifier_enabled: (data.notifier && data.notifier.enabled) ? true : false,
+          notifier_sound_level: (data.notifier && data.notifier.sound_level) || '',
+          notifier_sound_file: (data.notifier && data.notifier.sound_file) || '',
           filter_missions: (data.filter && data.filter.missions) ? data.filter.missions.join(',') : '',
           filter_senders: (data.filter && data.filter.senders) ? data.filter.senders.join(',') : '',
           filter_subtypes: (data.filter && data.filter.subtypes) ? data.filter.subtypes.join(',') : '',
@@ -329,7 +331,9 @@
           max_records: parseInt(data.storage_max_records) || 0
         },
         notifier: {
-          enabled: data.notifier_enabled === 'on'
+          enabled: data.notifier_enabled === 'on',
+          sound_level: data.notifier_sound_level || '',
+          sound_file: data.notifier_sound_file || ''
         },
         filter: {
           missions: data.filter_missions ? data.filter_missions.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [],

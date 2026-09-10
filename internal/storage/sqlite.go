@@ -75,13 +75,15 @@ func (s *SQLiteStorage) initSchema() error {
 	return nil
 }
 
+const timeLayout = "2006-01-02 15:04:05"
+
 // Save 插入一条消息
 func (s *SQLiteStorage) Save(msg *model.Message) error {
 	_, err := s.db.Exec(
 		`INSERT INTO messages (source, topic, level, subtype, title, mission, sender, content, received_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		msg.Source, msg.Topic, msg.Level, msg.SubType, msg.Title,
-		msg.Mission, msg.Sender, msg.Content, msg.ReceivedAt,
+		msg.Mission, msg.Sender, msg.Content, msg.ReceivedAt.Format(timeLayout),
 	)
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
@@ -132,11 +134,15 @@ func (s *SQLiteStorage) Query(filter QueryFilter) ([]*model.Message, int64, erro
 	var messages []*model.Message
 	for rows.Next() {
 		msg := &model.Message{}
+		var receivedAtStr string
 		if err := rows.Scan(
 			&msg.ID, &msg.Source, &msg.Topic, &msg.Level, &msg.SubType,
-			&msg.Title, &msg.Mission, &msg.Sender, &msg.Content, &msg.ReceivedAt,
+			&msg.Title, &msg.Mission, &msg.Sender, &msg.Content, &receivedAtStr,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan message: %w", err)
+		}
+		if t, err := time.ParseInLocation(timeLayout, receivedAtStr, time.Local); err == nil {
+			msg.ReceivedAt = t
 		}
 		messages = append(messages, msg)
 	}
@@ -155,11 +161,11 @@ func (s *SQLiteStorage) buildWhereClause(filter QueryFilter) (string, []interfac
 
 	if filter.StartTime != nil {
 		conditions = append(conditions, "received_at >= ?")
-		args = append(args, *filter.StartTime)
+		args = append(args, filter.StartTime.Format(timeLayout))
 	}
 	if filter.EndTime != nil {
 		conditions = append(conditions, "received_at <= ?")
-		args = append(args, *filter.EndTime)
+		args = append(args, filter.EndTime.Format(timeLayout))
 	}
 	if filter.Level != "" {
 		conditions = append(conditions, "level = ?")
@@ -195,7 +201,7 @@ func (s *SQLiteStorage) buildWhereClause(filter QueryFilter) (string, []interfac
 func (s *SQLiteStorage) Cleanup(retentionDays int, maxRecords int) error {
 	// 1. 删除超过 retentionDays 天的记录
 	if retentionDays > 0 {
-		cutoff := time.Now().AddDate(0, 0, -retentionDays)
+		cutoff := time.Now().AddDate(0, 0, -retentionDays).Format(timeLayout)
 		if _, err := s.db.Exec("DELETE FROM messages WHERE received_at < ?", cutoff); err != nil {
 			return fmt.Errorf("cleanup by retention days: %w", err)
 		}
@@ -203,14 +209,20 @@ func (s *SQLiteStorage) Cleanup(retentionDays int, maxRecords int) error {
 
 	// 2. 当总记录数超过 maxRecords 时删除最早的记录
 	if maxRecords > 0 {
-		if _, err := s.db.Exec(
-			`DELETE FROM messages WHERE id IN (
-				SELECT id FROM messages ORDER BY received_at ASC
-				LIMIT (SELECT COUNT(*) FROM messages) - ?
-			)`,
-			maxRecords,
-		); err != nil {
-			return fmt.Errorf("cleanup by max records: %w", err)
+		var count int64
+		if err := s.db.QueryRow("SELECT COUNT(*) FROM messages").Scan(&count); err != nil {
+			return fmt.Errorf("cleanup count: %w", err)
+		}
+		if count > int64(maxRecords) {
+			deleteCount := count - int64(maxRecords)
+			if _, err := s.db.Exec(
+				`DELETE FROM messages WHERE id IN (
+					SELECT id FROM messages ORDER BY received_at ASC LIMIT ?
+				)`,
+				deleteCount,
+			); err != nil {
+				return fmt.Errorf("cleanup by max records: %w", err)
+			}
 		}
 	}
 

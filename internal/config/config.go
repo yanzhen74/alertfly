@@ -56,7 +56,9 @@ type StorageConfig struct {
 
 // NotifierConfig 通知配置
 type NotifierConfig struct {
-	Enabled bool `yaml:"enabled" json:"enabled"`
+	Enabled    bool   `yaml:"enabled" json:"enabled"`
+	SoundLevel string `yaml:"sound_level" json:"sound_level"` // 触发声音报警的最低级别：warn / error，空=不发声
+	SoundFile  string `yaml:"sound_file" json:"sound_file"`   // 自定义声音文件路径，空=使用内嵌声音
 }
 
 // UpdaterConfig 自动更新配置

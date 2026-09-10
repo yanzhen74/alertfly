@@ -263,10 +263,13 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 	}
 
 	// --- 初始化异步通知包装器 ---
-	asyncNt := notifier.NewAsyncNotifier(nt, trayApp.ShowNotification)
+	asyncNt := notifier.NewAsyncNotifier(nt, trayApp.ShowNotification, cfg.Notifier.SoundLevel, cfg.Notifier.SoundFile)
 	asyncNt.Start(ctx)
 	nt = asyncNt // 后续所有 nt 调用自动走异步限流
 	log.Println("[main] AsyncNotifier 已启动（限流: 1s 间隔，合并: >3 条摘要）")
+	if cfg.Notifier.SoundLevel != "" {
+		log.Printf("[main] 声音报警已启用，触发级别: %s", cfg.Notifier.SoundLevel)
+	}
 
 	// --- 初始化并启动 Consumer（带重试） ---
 	// 支持同时启用 Redis 和 Kafka 两个消费者
