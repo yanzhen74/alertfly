@@ -35,6 +35,8 @@ type WebServer struct {
 	server         *http.Server
 	onCheckUpdate  func() *UpdateCheckResult // 立即检查更新回调
 	statusProvider func() []consumer.ConsumerStatus // 消费者状态回调
+	testNotifier   func() error                     // 测试通知回调
+	testSound      func() error                     // 测试声音回调
 }
 
 // NewWebServer 创建 Web 服务器实例
@@ -114,6 +116,8 @@ func (s *WebServer) registerRoutes() {
 	s.engine.PUT("/api/config", s.handleUpdateConfig)
 	s.engine.GET("/api/status", s.handleStatus)
 	s.engine.POST("/api/update/check", s.handleCheckUpdate)
+	s.engine.POST("/api/test/notification", s.handleTestNotification)
+	s.engine.POST("/api/test/sound", s.handleTestSound)
 }
 
 // Start 启动 HTTP 服务（非阻塞，内部启动 goroutine）
@@ -174,6 +178,12 @@ func (s *WebServer) handleCheckUpdate(c *gin.Context) {
 // SetStatusProvider 设置消费者状态回调，用于 /api/status 接口
 func (s *WebServer) SetStatusProvider(fn func() []consumer.ConsumerStatus) {
 	s.statusProvider = fn
+}
+
+// SetTestCallbacks 设置测试通知和测试声音回调
+func (s *WebServer) SetTestCallbacks(notifierFn, soundFn func() error) {
+	s.testNotifier = notifierFn
+	s.testSound = soundFn
 }
 
 // Stop 优雅关闭 HTTP 服务器

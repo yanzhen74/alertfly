@@ -1,6 +1,7 @@
 package web
 
 import (
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -158,6 +159,32 @@ func (s *WebServer) handleStatus(c *gin.Context) {
 		"code": 0,
 		"data": statuses,
 	})
+}
+
+// handleTestNotification POST /api/test/notification — 测试弹窗通知
+func (s *WebServer) handleTestNotification(c *gin.Context) {
+	if s.testNotifier == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "通知功能未启用"})
+		return
+	}
+	if err := s.testNotifier(); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 1, "msg": fmt.Sprintf("发送失败: %v", err)})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "测试通知已发送"})
+}
+
+// handleTestSound POST /api/test/sound — 测试声音报警
+func (s *WebServer) handleTestSound(c *gin.Context) {
+	if s.testSound == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "声音功能未配置"})
+		return
+	}
+	if err := s.testSound(); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 1, "msg": fmt.Sprintf("播放失败: %v", err)})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "声音测试中"})
 }
 
 // parseTimeFlex 灵活解析时间字符串，支持 "2006-01-02 15:04:05" 和 "2006-01-02" 两种格式

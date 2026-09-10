@@ -18,6 +18,7 @@ import (
 	"github.com/oliverxu/alertfly/internal/model"
 	"github.com/oliverxu/alertfly/internal/notifier"
 	"github.com/oliverxu/alertfly/internal/proxy"
+	"github.com/oliverxu/alertfly/internal/sound"
 	"github.com/oliverxu/alertfly/internal/storage"
 	"github.com/oliverxu/alertfly/internal/tray"
 	"github.com/oliverxu/alertfly/internal/updater"
@@ -286,6 +287,32 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 	if cfg.Notifier.SoundLevel != "" {
 		log.Printf("[main] 声音报警已启用，触发级别: %s", cfg.Notifier.SoundLevel)
 	}
+
+	// --- 设置测试回调 ---
+	ws.SetTestCallbacks(
+		// 测试通知
+		func() error {
+			if !cfg.Notifier.Enabled {
+				return fmt.Errorf("通知功能未启用")
+			}
+			testMsg := &model.Message{
+				Level:      "warn",
+				Title:      "测试通知",
+				Content:    "这是一条测试告警，用于验证通知功能是否正常",
+				Source:     "test",
+				ReceivedAt: time.Now(),
+			}
+			return nt.Notify(testMsg)
+		},
+		// 测试声音
+		func() error {
+			if cfg.Notifier.SoundLevel == "" {
+				return fmt.Errorf("声音报警未配置")
+			}
+			go sound.Play(cfg.Notifier.SoundFile)
+			return nil
+		},
+	)
 
 	// --- 初始化并启动 Consumer（带重试） ---
 	// 支持同时启用 Redis 和 Kafka 两个消费者

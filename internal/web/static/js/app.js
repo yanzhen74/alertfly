@@ -392,6 +392,44 @@
       layer.msg('已还原配置', { icon: 1 });
     };
 
+    // --- 测试通知按钮 ---
+    var btnTestNotify = document.getElementById('btnTestNotify');
+    var btnTestSound = document.getElementById('btnTestSound');
+    var testResult = document.getElementById('testResult');
+
+    if (btnTestNotify) {
+      btnTestNotify.onclick = function () {
+        testResult.textContent = '发送中...';
+        fetch('/api/test/notification', { method: 'POST' })
+          .then(function (res) { return res.json(); })
+          .then(function (result) {
+            if (result.code === 0) {
+              testResult.innerHTML = '<span style="color:#5FB878;">' + result.msg + '</span>';
+            } else {
+              testResult.innerHTML = '<span style="color:#FF5722;">' + result.msg + '</span>';
+            }
+          })
+          .catch(function () { testResult.innerHTML = '<span style="color:#FF5722;">请求失败</span>'; });
+      };
+    }
+
+    // --- 测试声音按钮 ---
+    if (btnTestSound) {
+      btnTestSound.onclick = function () {
+        testResult.textContent = '播放中...';
+        fetch('/api/test/sound', { method: 'POST' })
+          .then(function (res) { return res.json(); })
+          .then(function (result) {
+            if (result.code === 0) {
+              testResult.innerHTML = '<span style="color:#5FB878;">' + result.msg + '</span>';
+            } else {
+              testResult.innerHTML = '<span style="color:#FF5722;">' + result.msg + '</span>';
+            }
+          })
+          .catch(function () { testResult.innerHTML = '<span style="color:#FF5722;">请求失败</span>'; });
+      };
+    }
+
     // 初始加载
     loadConfig();
   }
