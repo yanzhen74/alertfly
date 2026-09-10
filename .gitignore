@@ -25,6 +25,7 @@ vendor/
 # Temp
 *.tmp
 *.download
+*.tar.gz
 
 # User config files (scripts)
 *.user
