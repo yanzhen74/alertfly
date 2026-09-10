@@ -1,6 +1,6 @@
 #!/bin/bash
 # AlertFly 编译脚本
-# 用法: ./build.sh [linux|windows|pack|all] [版本号]
+# 用法: ./build.sh [linux|windows|pack|all] [版本号] [服务器地址]
 #
 # 使用 git tag 版本（默认）
 #   ./build.sh all
@@ -9,13 +9,20 @@
 # 手动指定版本号
 #   ./build.sh all 0.3.0
 #   ./build.sh linux 0.3.0
+#
+# 指定更新服务器地址（替换 version.json 中 URL 的 localhost）
+#   ./build.sh all 0.3.0 192.168.1.100
+#   ./build.sh all -- 192.168.1.100
 
 set -e
 
 export PATH=$PATH:/usr/local/go/bin
 
-# 第二个参数为版本号（可选）
-if [ -n "$2" ]; then
+# 第三个参数为服务器地址（可选），用于替换 version.json 中 URL 的 localhost
+SERVER_ADDR="${3:-}"
+
+# 第二个参数为版本号（可选，支持 -- 占位跳过）
+if [ -n "$2" ] && [ "$2" != "--" ]; then
     VERSION="$2"
 else
     # 如果正好在 tag 上，使用 tag 版本；否则基于最新 tag 递增 patch
@@ -73,6 +80,13 @@ update_version_info() {
     # 更新 version 字段
     update_version_json "version" "${VERSION_CLEAN}"
     echo ">>> 已更新 ${VERSION_JSON}: version=${VERSION_CLEAN}"
+
+    # 替换 URL 中的 localhost 为实际服务器地址
+    if [ -n "$SERVER_ADDR" ]; then
+        update_version_json "linux_url" "http://${SERVER_ADDR}:8000/alertfly"
+        update_version_json "windows_url" "http://${SERVER_ADDR}:8000/alertfly.exe"
+        echo ">>> 已更新 ${VERSION_JSON}: server=${SERVER_ADDR}"
+    fi
 
     for platform in "$@"; do
         case "${platform}" in
@@ -157,7 +171,7 @@ case "${1:-all}" in
         pack
         ;;
     *)
-        echo "用法: $0 [linux|windows|pack|all] [版本号]"
+        echo "用法: $0 [linux|windows|pack|all] [版本号|--] [服务器IP]"
         exit 1
         ;;
 esac
