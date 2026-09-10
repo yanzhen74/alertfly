@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/oliverxu/alertfly/internal/config"
+	"github.com/oliverxu/alertfly/internal/logger"
 	"github.com/oliverxu/alertfly/internal/model"
 	"github.com/oliverxu/alertfly/internal/storage"
 	"gopkg.in/yaml.v3"
@@ -195,6 +196,36 @@ func (s *WebServer) handleTestSound(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "声音测试中"})
+}
+
+// handleGetLogLevel GET /api/log/level — 获取当前日志级别
+func (s *WebServer) handleGetLogLevel(c *gin.Context) {
+	level := logger.GetLevel()
+	c.JSON(http.StatusOK, gin.H{
+		"code":  0,
+		"level": level.String(),
+	})
+}
+
+// handleSetLogLevel PUT /api/log/level — 运行时调整日志级别
+func (s *WebServer) handleSetLogLevel(c *gin.Context) {
+	var req struct {
+		Level string `json:"level" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "参数错误: " + err.Error()})
+		return
+	}
+
+	level := logger.ParseLevel(req.Level)
+	logger.SetLevel(level)
+	logger.Info("[web] 日志级别已调整为: %s", level.String())
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":  0,
+		"msg":   fmt.Sprintf("日志级别已调整为: %s", level.String()),
+		"level": level.String(),
+	})
 }
 
 // parseTimeFlex 灵活解析时间字符串，支持 "2006-01-02 15:04:05" 和 "2006-01-02" 两种格式

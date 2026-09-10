@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 	"github.com/oliverxu/alertfly/internal/config"
+	"github.com/oliverxu/alertfly/internal/logger"
 	"github.com/oliverxu/alertfly/internal/model"
 )
 
@@ -137,9 +137,9 @@ func (c *RedisConsumer) consumePubSub(ctx context.Context) {
 	pattern := isPattern(c.cfg.Channel)
 
 	if pattern {
-		log.Printf("[redis] 使用模式匹配订阅: %s", c.cfg.Channel)
+		logger.Info("[redis] 使用模式匹配订阅: %s", c.cfg.Channel)
 	} else {
-		log.Printf("[redis] 使用精确订阅: %s", c.cfg.Channel)
+		logger.Info("[redis] 使用精确订阅: %s", c.cfg.Channel)
 	}
 
 	for {

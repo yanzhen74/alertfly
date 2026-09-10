@@ -15,6 +15,7 @@ import (
 
 	"github.com/oliverxu/alertfly/internal/config"
 	"github.com/oliverxu/alertfly/internal/consumer"
+	"github.com/oliverxu/alertfly/internal/logger"
 	"github.com/oliverxu/alertfly/internal/model"
 	"github.com/oliverxu/alertfly/internal/notifier"
 	"github.com/oliverxu/alertfly/internal/proxy"
@@ -42,6 +43,17 @@ func main() {
 	if err != nil {
 		log.Fatalf("[main] 加载配置文件失败: %v", err)
 	}
+
+	// --- 初始化日志器（尽早初始化，后续模块使用 logger 输出）---
+	if err := logger.Init(logger.Config{
+		Level:     cfg.Log.Level,
+		FilePath:  cfg.Log.FilePath,
+		MaxSizeMB: cfg.Log.MaxSizeMB,
+	}); err != nil {
+		log.Fatalf("[main] 初始化日志器失败: %v", err)
+	}
+	defer logger.Close()
+	logger.Info("[main] 日志器初始化完成，级别: %s", cfg.Log.Level)
 
 	// 命令行参数覆盖配置文件
 	if *redisAddr != "" {
@@ -95,7 +107,7 @@ func main() {
 
 	go func() {
 		sig := <-sigCh
-		log.Printf("[main] 收到信号 %v，开始优雅退出...", sig)
+		logger.Info("[main] 收到信号 %v，开始优雅退出...", sig)
 		cancel()
 	}()
 
@@ -105,7 +117,7 @@ func main() {
 	// Linux 上：tray.Start() 是 noop，main 最后的调用立即返回，再等待 doneCh。
 	webURL := fmt.Sprintf("http://127.0.0.1:%d", cfg.Web.Port)
 	trayApp := tray.NewTrayApp(webURL, func() {
-		log.Println("[main] 托盘退出回调，触发程序退出")
+		logger.Info("[main] 托盘退出回调，触发程序退出")
 		cancel()
 	})
 
@@ -127,7 +139,7 @@ func main() {
 
 	// 等待业务 goroutine 退出（Linux 上主要靠此处阻塞）
 	<-doneCh
-	log.Println("[main] AlertFly 已退出")
+	logger.Info("[main] AlertFly 已退出")
 }
 
 // runApp 包含 AlertFly 的全部业务逻辑，在独立 goroutine 中运行。
@@ -142,7 +154,7 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 		log.Fatalf("[main] 初始化 SQLite 存储失败: %v", err)
 	}
 	defer store.Close()
-	log.Println("[main] SQLite 存储初始化成功")
+	logger.Info("[main] SQLite 存储初始化成功")
 
 	// --- 创建更新事件记录回调 ---
 	recordUpdateEvent := func(event updater.Event) {
@@ -162,7 +174,7 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 			msg.Content = fmt.Sprintf("新版本: %s, 下载地址: %s", event.Version, event.URL)
 		case updater.EventAlreadyLatest:
 			// "已是最新版本" 不记录到数据库，避免定时检查产生大量无意义记录
-			log.Printf("[updater] 版本检查完成，已是最新版本")
+			logger.Debug("[updater] 版本检查完成，已是最新版本")
 			return
 		case updater.EventCheckFailed:
 			msg.Level = "warn"
@@ -183,14 +195,14 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 		}
 
 		if saveErr := store.Save(msg); saveErr != nil {
-			log.Printf("[main] 保存更新事件失败: %v", saveErr)
+			logger.Error("[main] 保存更新事件失败: %v", saveErr)
 		}
 	}
 
 	// --- 初始化 Web 服务器 ---
 	ws := web.NewWebServer(cfg.Web.Port, *configPath, store, cfg)
 	if err := ws.Start(); err != nil {
-		log.Printf("[main] Web UI 启动失败: %v", err)
+		logger.Error("[main] Web UI 启动失败: %v", err)
 	}
 
 	// --- 初始化 Updater（自更新）---
@@ -204,7 +216,7 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 		if data, err := os.ReadFile(versionFile); err == nil {
 			v := strings.TrimSpace(string(data))
 			if v != "" {
-				log.Printf("[main] 检测到更新标记，版本号 %s → %s", version, v)
+				logger.Info("[main] 检测到更新标记，版本号 %s → %s", version, v)
 				version = v
 			}
 		}
@@ -220,10 +232,10 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 			udCfg.Interval = 24 * time.Hour
 		}
 		ud = updater.NewUpdater(udCfg, version, func(title string, body string) {
-			log.Printf("[updater] %s: %s", title, body)
+			logger.Info("[updater] %s: %s", title, body)
 		}, recordUpdateEvent)
 		ud.Start(ctx)
-		log.Println("[main] Updater 已启动")
+		logger.Info("[main] Updater 已启动")
 	}
 	// 注册立即检查更新回调
 	ws.SetCheckUpdateHandler(func() *web.UpdateCheckResult {
@@ -241,10 +253,10 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 				udCfg.Interval = 24 * time.Hour
 			}
 			ud = updater.NewUpdater(udCfg, version, func(title string, body string) {
-				log.Printf("[updater] %s: %s", title, body)
+				logger.Info("[updater] %s: %s", title, body)
 			}, recordUpdateEvent)
 			ud.Start(ctx)
-			log.Println("[main] Updater 动态初始化完成")
+			logger.Info("[main] Updater 动态初始化完成")
 		}
 		result := ud.CheckAndUpdate()
 		// 手动触发不受抑制影响，始终记录检查失败事件
@@ -267,25 +279,25 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 	px := proxy.NewProxy()
 	px.RegisterAdapter(&proxy.DefaultJSONAdapter{})
 	px.SetDefault("json")
-	log.Println("[main] Proxy 初始化完成，注册默认 JSON 适配器")
+	logger.Info("[main] Proxy 初始化完成，注册默认 JSON 适配器")
 
 	// --- 初始化 Notifier ---
 	var nt notifier.Notifier
 	if cfg.Notifier.Enabled {
 		nt = notifier.NewNotifier()
-		log.Println("[main] Notifier 初始化成功")
+		logger.Info("[main] Notifier 初始化成功")
 	} else {
 		nt = &logNotifier{}
-		log.Println("[main] Notifier 已禁用，使用日志替代")
+		logger.Info("[main] Notifier 已禁用，使用日志替代")
 	}
 
 	// --- 初始化异步通知包装器 ---
 	asyncNt := notifier.NewAsyncNotifier(nt, trayApp.ShowNotification, cfg.Notifier.SoundLevel, cfg.Notifier.SoundFile)
 	asyncNt.Start(ctx)
 	nt = asyncNt // 后续所有 nt 调用自动走异步限流
-	log.Println("[main] AsyncNotifier 已启动（限流: 1s 间隔，合并: >3 条摘要）")
+	logger.Info("[main] AsyncNotifier 已启动（限流: 1s 间隔，合并: >3 条摘要）")
 	if cfg.Notifier.SoundLevel != "" {
-		log.Printf("[main] 声音报警已启用，触发级别: %s", cfg.Notifier.SoundLevel)
+		logger.Info("[main] 声音报警已启用，触发级别: %s", cfg.Notifier.SoundLevel)
 	}
 
 	// --- 设置测试回调 ---
@@ -351,7 +363,7 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 		var parts []string
 		if len(hotReloaded) > 0 {
 			parts = append(parts, fmt.Sprintf("%s 已立即生效", strings.Join(hotReloaded, "、")))
-			log.Printf("[main] 配置热重载: %s", strings.Join(hotReloaded, "、"))
+			logger.Info("[main] 配置热重载: %s", strings.Join(hotReloaded, "、"))
 		}
 		if len(needRestart) > 0 {
 			parts = append(parts, fmt.Sprintf("%s 需重启后生效", strings.Join(needRestart, "、")))
@@ -385,18 +397,18 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 				}
 			}
 			if createErr == nil {
-				log.Printf("[main] %s 消费者已启动", name)
+				logger.Info("[main] %s 消费者已启动", name)
 				return c, nil
 			}
 
-			log.Printf("[main] %v，%v 后重试...", createErr, retryInterval)
+			logger.Warn("[main] %v，%v 后重试...", createErr, retryInterval)
 			if notifyErr := nt.NotifyError(name+"消费者启动失败", createErr.Error()); notifyErr != nil {
-				log.Printf("[main] 发送错误通知失败: %v", notifyErr)
+				logger.Error("[main] 发送错误通知失败: %v", notifyErr)
 			}
 
 			select {
 			case <-ctx.Done():
-				log.Println("[main] 收到退出信号，停止重试")
+				logger.Info("[main] 收到退出信号，停止重试")
 				return nil, fmt.Errorf("退出")
 			case <-time.After(retryInterval):
 			}
@@ -449,9 +461,9 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 				return
 			case <-ticker.C:
 				if err := store.Cleanup(cfg.Storage.RetentionDays, cfg.Storage.MaxRecords); err != nil {
-					log.Printf("[main] 存储清理失败: %v", err)
+					logger.Error("[main] 存储清理失败: %v", err)
 				} else {
-					log.Println("[main] 存储清理完成")
+					logger.Info("[main] 存储清理完成")
 				}
 			}
 		}
@@ -483,15 +495,15 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 		}()
 	}
 
-	log.Println("[main] AlertFly 主循环启动，等待消息...")
+	logger.Info("[main] AlertFly 主循环启动，等待消息...")
 	for {
 		select {
 		case <-ctx.Done():
-			log.Println("[main] 主循环退出")
+			logger.Info("[main] 主循环退出")
 			goto shutdown
 		case msg, ok := <-msgCh:
 			if !ok {
-				log.Println("[main] 消息通道已关闭")
+				logger.Info("[main] 消息通道已关闭")
 				goto shutdown
 			}
 
@@ -514,23 +526,23 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 
 			// 存入 Storage（无论是否匹配过滤条件，始终存储）
 			if err := store.Save(msg); err != nil {
-				log.Printf("[main] 存储消息失败: %v", err)
+				logger.Error("[main] 存储消息失败: %v", err)
 			}
 
 			// 根据过滤条件决定是否弹窗通知
 			if shouldNotify(msg, &cfg.Filter) {
 				if err := nt.Notify(msg); err != nil {
-					log.Printf("[main] 发送通知失败: %v", err)
+					logger.Error("[main] 发送通知失败: %v", err)
 				}
 			} else {
-				log.Printf("[main] 消息被过滤，不弹窗: [%s] %s", msg.Level, msg.Title)
+				logger.Debug("[main] 消息被过滤，不弹窗: [%s] %s", msg.Level, msg.Title)
 			}
 
 			// stdout 模式输出
 			if *stdout {
 				data, err := json.Marshal(msg)
 				if err != nil {
-					log.Printf("[main] JSON 序列化消息失败: %v", err)
+					logger.Error("[main] JSON 序列化消息失败: %v", err)
 				} else {
 					fmt.Println(string(data))
 				}
@@ -538,36 +550,36 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 
 		case err, ok := <-errCh:
 			if !ok {
-				log.Println("[main] 错误通道已关闭")
+				logger.Info("[main] 错误通道已关闭")
 				continue
 			}
-			log.Printf("[main] 消费者错误: %v", err)
+			logger.Warn("[main] 消费者错误: %v", err)
 			// 通过 Notifier 发送连接异常警告
 			if notifyErr := nt.NotifyError("消费连接异常", err.Error()); notifyErr != nil {
-				log.Printf("[main] 发送错误通知失败: %v", notifyErr)
+				logger.Error("[main] 发送错误通知失败: %v", notifyErr)
 			}
 		}
 	}
 
 shutdown:
 	// 优雅关闭
-	log.Println("[main] 正在关闭 Web 服务器...")
+	logger.Info("[main] 正在关闭 Web 服务器...")
 	if ws != nil {
 		if err := ws.Stop(); err != nil {
-			log.Printf("[main] 关闭 Web 服务器失败: %v", err)
+			logger.Error("[main] 关闭 Web 服务器失败: %v", err)
 		}
 	}
-	log.Println("[main] 正在关闭消费者...")
+	logger.Info("[main] 正在关闭消费者...")
 	for _, ce := range consumers {
 		if err := ce.Close(); err != nil {
-			log.Printf("[main] 关闭 %s 消费者失败: %v", ce.name, err)
+			logger.Error("[main] 关闭 %s 消费者失败: %v", ce.name, err)
 		}
 	}
-	log.Println("[main] 正在关闭异步通知...")
+	logger.Info("[main] 正在关闭异步通知...")
 	asyncNt.Close()
-	log.Println("[main] 正在关闭存储...")
+	logger.Info("[main] 正在关闭存储...")
 	if err := store.Close(); err != nil {
-		log.Printf("[main] 关闭存储失败: %v", err)
+		logger.Error("[main] 关闭存储失败: %v", err)
 	}
 
 	// 业务退出后触发全局 cancel（Windows 场景：确保 systray 也收到退出信号）
@@ -578,12 +590,12 @@ shutdown:
 type logNotifier struct{}
 
 func (l *logNotifier) Notify(msg *model.Message) error {
-	log.Printf("[notifier] [%s] %s: %s", msg.Level, msg.Title, truncate(msg.Content, 100))
+	logger.Info("[notifier] [%s] %s: %s", msg.Level, msg.Title, truncate(msg.Content, 100))
 	return nil
 }
 
 func (l *logNotifier) NotifyError(title string, body string) error {
-	log.Printf("[notifier] [error] %s: %s", title, body)
+	logger.Error("[notifier] [error] %s: %s", title, body)
 	return nil
 }
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"regexp"
 	"strings"
 	"sync"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/Shopify/sarama"
 	"github.com/oliverxu/alertfly/internal/config"
+	"github.com/oliverxu/alertfly/internal/logger"
 	"github.com/oliverxu/alertfly/internal/model"
 )
 
@@ -55,7 +55,7 @@ func NewKafkaConsumer(cfg *config.KafkaConfig) (*KafkaConsumer, error) {
 		return nil, fmt.Errorf("invalid kafka version %q: %w", kafkaVersion, err)
 	}
 	saramaCfg.Version = version
-	log.Printf("[kafka] 使用 Kafka 协议版本: %s", kafkaVersion)
+	logger.Info("[kafka] 使用 Kafka 协议版本: %s", kafkaVersion)
 
 	// 启用自动提交 offset
 	saramaCfg.Consumer.Offsets.AutoCommit.Enable = true
@@ -139,14 +139,14 @@ func (k *KafkaConsumer) getTopics() ([]string, error) {
 	if err != nil {
 		// 解析失败但有旧缓存，沿用旧缓存
 		if len(k.resolvedTopics) > 0 {
-			log.Printf("[kafka] topic 扫描失败，使用缓存: %v", err)
+			logger.Warn("[kafka] topic 扫描失败，使用缓存: %v", err)
 			return k.resolvedTopics, nil
 		}
 		return nil, err
 	}
 
 	if isFirst {
-		log.Printf("[kafka] 首次扫描 topics，发现 %d 个匹配: %v", len(topics), topics)
+		logger.Info("[kafka] 首次扫描 topics，发现 %d 个匹配: %v", len(topics), topics)
 	} else {
 		// 对比新旧，仅在有变化时输出日志
 		oldSet := make(map[string]bool, len(k.resolvedTopics))
@@ -169,7 +169,7 @@ func (k *KafkaConsumer) getTopics() ([]string, error) {
 			}
 		}
 		if len(added) > 0 || len(removed) > 0 {
-			log.Printf("[kafka] topic 扫描更新：新增 %v，移除 %v", added, removed)
+			logger.Info("[kafka] topic 扫描更新：新增 %v，移除 %v", added, removed)
 		}
 	}
 
@@ -220,7 +220,7 @@ func (k *KafkaConsumer) resolveTopics() ([]string, error) {
 
 	// 没有正则模式，直接返回精确 topic
 	if len(includePatterns) == 0 && len(excludePatterns) == 0 {
-		log.Printf("[kafka] 精确订阅 topics: %v", exactTopics)
+		logger.Debug("[kafka] 精确订阅 topics: %v", exactTopics)
 		return exactTopics, nil
 	}
 
@@ -232,7 +232,7 @@ func (k *KafkaConsumer) resolveTopics() ([]string, error) {
 
 	// 记录精确 topic
 	if len(exactTopics) > 0 {
-		log.Printf("[kafka] 精确订阅 topics: %v", exactTopics)
+		logger.Debug("[kafka] 精确订阅 topics: %v", exactTopics)
 	}
 
 	// 先用包含规则匹配；无包含规则时，排除规则作用于所有 broker topic
@@ -248,7 +248,7 @@ func (k *KafkaConsumer) resolveTopics() ([]string, error) {
 					resolvedSet[topic] = true
 				}
 			}
-			log.Printf("[kafka] 正则包含 %q → 匹配 %d 个 topic", p.raw, len(hits))
+			logger.Debug("[kafka] 正则包含 %q → 匹配 %d 个 topic", p.raw, len(hits))
 			matched = append(matched, hits...)
 		}
 	} else {
@@ -274,7 +274,7 @@ func (k *KafkaConsumer) resolveTopics() ([]string, error) {
 					remaining = append(remaining, topic)
 				}
 			}
-			log.Printf("[kafka] 正则排除 %q → 排除 %d 个 topic", p.raw, excludeCount)
+			logger.Debug("[kafka] 正则排除 %q → 排除 %d 个 topic", p.raw, excludeCount)
 			matched = remaining
 		}
 		filtered = matched
@@ -286,7 +286,7 @@ func (k *KafkaConsumer) resolveTopics() ([]string, error) {
 	result = append(result, exactTopics...)
 	result = append(result, matched...)
 
-	log.Printf("[kafka] 最终消费 topics (%d个): %v", len(result), result)
+	logger.Debug("[kafka] 最终消费 topics (%d个): %v", len(result), result)
 
 	return result, nil
 }
@@ -340,7 +340,7 @@ func (k *KafkaConsumer) Start(ctx context.Context) error {
 			}
 
 			if len(topics) == 0 {
-				log.Printf("[kafka] 未匹配到任何 topic，等待重试...")
+				logger.Warn("[kafka] 未匹配到任何 topic，等待重试...")
 				select {
 				case <-ctx.Done():
 					return

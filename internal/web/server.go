@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
-	"log"
 	"net/http"
 	"os/exec"
 	"runtime"
@@ -14,6 +13,7 @@ import (
 
 	"github.com/oliverxu/alertfly/internal/config"
 	"github.com/oliverxu/alertfly/internal/consumer"
+	"github.com/oliverxu/alertfly/internal/logger"
 	"github.com/oliverxu/alertfly/internal/storage"
 )
 
@@ -66,21 +66,21 @@ func (s *WebServer) registerRoutes() {
 	// 为 css 和 js 分别创建子目录 FS，确保路径映射正确
 	cssFS, err := fs.Sub(StaticFS, "static/css")
 	if err != nil {
-		log.Printf("[web] 创建 CSS 子目录 FS 失败: %v", err)
+		logger.Error("[web] 创建 CSS 子目录 FS 失败: %v", err)
 	} else {
 		s.engine.StaticFS("/css", http.FS(cssFS))
 	}
 
 	jsFS, err := fs.Sub(StaticFS, "static/js")
 	if err != nil {
-		log.Printf("[web] 创建 JS 子目录 FS 失败: %v", err)
+		logger.Error("[web] 创建 JS 子目录 FS 失败: %v", err)
 	} else {
 		s.engine.StaticFS("/js", http.FS(jsFS))
 	}
 
 	fontFS, err := fs.Sub(StaticFS, "static/font")
 	if err != nil {
-		log.Printf("[web] 创建 Font 子目录 FS 失败: %v", err)
+		logger.Error("[web] 创建 Font 子目录 FS 失败: %v", err)
 	} else {
 		s.engine.StaticFS("/font", http.FS(fontFS))
 	}
@@ -119,6 +119,8 @@ func (s *WebServer) registerRoutes() {
 	s.engine.POST("/api/update/check", s.handleCheckUpdate)
 	s.engine.POST("/api/test/notification", s.handleTestNotification)
 	s.engine.POST("/api/test/sound", s.handleTestSound)
+	s.engine.PUT("/api/log/level", s.handleSetLogLevel)
+	s.engine.GET("/api/log/level", s.handleGetLogLevel)
 }
 
 // Start 启动 HTTP 服务（非阻塞，内部启动 goroutine）
@@ -130,12 +132,12 @@ func (s *WebServer) Start() error {
 	}
 
 	go func() {
-		log.Printf("[web] ════════════════════════════════════════")
-		log.Printf("[web] AlertFly Web UI 已启动")
-		log.Printf("[web] 访问地址: http://127.0.0.1:%d", s.port)
-		log.Printf("[web] ════════════════════════════════════════")
+		logger.Info("[web] ════════════════════════════════════════")
+		logger.Info("[web] AlertFly Web UI 已启动")
+		logger.Info("[web] 访问地址: http://127.0.0.1:%d", s.port)
+		logger.Info("[web] ════════════════════════════════════════")
 		if err := s.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("[web] HTTP 服务器异常退出: %v", err)
+			logger.Error("[web] HTTP 服务器异常退出: %v", err)
 		}
 	}()
 
@@ -198,14 +200,14 @@ func (s *WebServer) Stop() error {
 		return nil
 	}
 
-	log.Println("[web] 正在关闭 HTTP 服务器...")
+	logger.Info("[web] 正在关闭 HTTP 服务器...")
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := s.server.Shutdown(ctx); err != nil {
 		return fmt.Errorf("关闭 HTTP 服务器失败: %w", err)
 	}
-	log.Println("[web] HTTP 服务器已关闭")
+	logger.Info("[web] HTTP 服务器已关闭")
 	return nil
 }
 
@@ -220,11 +222,11 @@ func (s *WebServer) openBrowser() {
 	case "windows":
 		cmd = exec.Command("cmd", "/c", "start", url)
 	default:
-		log.Printf("[web] 不支持的平台 %s，无法自动打开浏览器", runtime.GOOS)
+		logger.Warn("[web] 不支持的平台 %s，无法自动打开浏览器", runtime.GOOS)
 		return
 	}
 
 	if err := cmd.Run(); err != nil {
-		log.Printf("[web] 自动打开浏览器失败: %v", err)
+		logger.Warn("[web] 自动打开浏览器失败: %v", err)
 	}
 }

@@ -16,6 +16,7 @@ type Config struct {
 	Updater  UpdaterConfig  `yaml:"updater" json:"updater"`
 	Web      WebConfig      `yaml:"web" json:"web"`
 	Filter   FilterConfig   `yaml:"filter" json:"filter"`
+	Log      LogConfig      `yaml:"log" json:"log"`
 }
 
 // WebConfig Web UI 配置
@@ -74,6 +75,13 @@ type FilterConfig struct {
 	Missions []string `yaml:"missions" json:"missions"` // 接收的任务名列表，空=全部
 	Senders  []string `yaml:"senders" json:"senders"`   // 接收的发送者列表，空=全部
 	SubTypes []string `yaml:"subtypes" json:"subtypes"` // 接收的子类型列表，空=全部
+}
+
+// LogConfig 日志配置
+type LogConfig struct {
+	Level     string `yaml:"level" json:"level"`           // 日志级别：debug/info/warn/error，默认 info
+	FilePath  string `yaml:"file_path" json:"file_path"`   // 日志文件路径，空=仅输出到 stderr
+	MaxSizeMB int    `yaml:"max_size_mb" json:"max_size_mb"` // 单个日志文件最大 MB，默认 10
 }
 
 // LoadConfig 从 YAML 文件加载配置

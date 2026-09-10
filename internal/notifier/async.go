@@ -3,11 +3,11 @@ package notifier
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/oliverxu/alertfly/internal/logger"
 	"github.com/oliverxu/alertfly/internal/model"
 	"github.com/oliverxu/alertfly/internal/sound"
 )
@@ -65,7 +65,7 @@ func (a *AsyncNotifier) Notify(msg *model.Message) error {
 	a.mu.Lock()
 	if a.closed {
 		a.mu.Unlock()
-		log.Printf("[notifier] 通知队列已关闭，丢弃通知: [%s] %s", msg.Level, msg.Title)
+		logger.Warn("[notifier] 通知队列已关闭，丢弃通知: [%s] %s", msg.Level, msg.Title)
 		return nil
 	}
 	a.mu.Unlock()
@@ -74,7 +74,7 @@ func (a *AsyncNotifier) Notify(msg *model.Message) error {
 	case a.ch <- msg:
 		return nil
 	default:
-		log.Printf("[notifier] 通知队列已满(%d)，丢弃通知: [%s] %s",
+		logger.Warn("[notifier] 通知队列已满(%d)，丢弃通知: [%s] %s",
 			defaultChanSize, msg.Level, msg.Title)
 		return nil
 	}
@@ -151,19 +151,19 @@ func (a *AsyncNotifier) processLoop(appCtx context.Context) {
 				}
 				summary := a.createSummary(batch)
 				if err := a.inner.Notify(summary); err != nil {
-					log.Printf("[notifier] 发送摘要通知失败: %v", err)
+					logger.Error("[notifier] 发送摘要通知失败: %v", err)
 				}
 				// 气泡通知走 trayNotify 回调（Windows Balloon Tip / Linux notify-send）
 				if a.trayNotify != nil {
 					a.trayNotify(summary.Title, summary.Content)
 				}
 				a.maybePlaySound(summary.Level)
-				log.Printf("[notifier] 合并 %d 条消息为摘要通知（最高级别: %s）",
+				logger.Info("[notifier] 合并 %d 条消息为摘要通知（最高级别: %s）",
 					len(batch), summary.Level)
 			} else {
 				// 正常模式 → 单条通知
 				if err := a.inner.Notify(msg); err != nil {
-					log.Printf("[notifier] 发送通知失败: %v", err)
+					logger.Error("[notifier] 发送通知失败: %v", err)
 				}
 				// 气泡通知走 trayNotify 回调
 				if a.trayNotify != nil {
