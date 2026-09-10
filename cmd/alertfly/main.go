@@ -314,6 +314,54 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 		},
 	)
 
+	// --- 设置配置热重载回调 ---
+	ws.SetConfigReloadCallback(func(old, new *config.Config) string {
+		var hotReloaded []string
+		var needRestart []string
+
+		// 通知设置：声音配置可热重载
+		if old.Notifier.SoundLevel != new.Notifier.SoundLevel || old.Notifier.SoundFile != new.Notifier.SoundFile {
+			asyncNt.UpdateSound(new.Notifier.SoundLevel, new.Notifier.SoundFile)
+			hotReloaded = append(hotReloaded, "声音报警")
+		}
+
+		// 过滤配置：主循环每次迭代读取 cfg.Filter，自动生效
+		if !stringSliceEqual(old.Filter.Missions, new.Filter.Missions) ||
+			!stringSliceEqual(old.Filter.Senders, new.Filter.Senders) ||
+			!stringSliceEqual(old.Filter.SubTypes, new.Filter.SubTypes) {
+			hotReloaded = append(hotReloaded, "接收过滤")
+		}
+
+		// 存储配置：清理 goroutine 每次读取 cfg.Storage，自动生效
+		if old.Storage.RetentionDays != new.Storage.RetentionDays || old.Storage.MaxRecords != new.Storage.MaxRecords {
+			hotReloaded = append(hotReloaded, "存储清理策略")
+		}
+
+		// 消费者配置：需要重启
+		if old.Redis.Enabled != new.Redis.Enabled || old.Redis.Addr != new.Redis.Addr ||
+			old.Redis.Channel != new.Redis.Channel || old.Redis.Stream != new.Redis.Stream {
+			needRestart = append(needRestart, "Redis 连接")
+		}
+		if old.Kafka.Enabled != new.Kafka.Enabled || !stringSliceEqual(old.Kafka.Brokers, new.Kafka.Brokers) ||
+			!stringSliceEqual(old.Kafka.Topics, new.Kafka.Topics) {
+			needRestart = append(needRestart, "Kafka 连接")
+		}
+
+		// 构造提示信息
+		var parts []string
+		if len(hotReloaded) > 0 {
+			parts = append(parts, fmt.Sprintf("%s 已立即生效", strings.Join(hotReloaded, "、")))
+			log.Printf("[main] 配置热重载: %s", strings.Join(hotReloaded, "、"))
+		}
+		if len(needRestart) > 0 {
+			parts = append(parts, fmt.Sprintf("%s 需重启后生效", strings.Join(needRestart, "、")))
+		}
+		if len(parts) == 0 {
+			return "配置已保存"
+		}
+		return "配置已保存，" + strings.Join(parts, "；")
+	})
+
 	// --- 初始化并启动 Consumer（带重试） ---
 	// 支持同时启用 Redis 和 Kafka 两个消费者
 	type consumerEntry struct {
@@ -589,4 +637,17 @@ func matchList(value string, list []string) bool {
 		}
 	}
 	return false
+}
+
+// stringSliceEqual 比较两个字符串切片是否相等
+func stringSliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

@@ -204,6 +204,14 @@ func (a *AsyncNotifier) maybePlaySound(level string) {
 	}
 }
 
+// UpdateSound 动态更新声音报警配置（热重载）
+func (a *AsyncNotifier) UpdateSound(level, file string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.soundLevel = levelPriority(level)
+	a.soundFile = file
+}
+
 // levelPriority 返回级别的数字优先级，用于比较。
 func levelPriority(level string) int {
 	switch strings.ToLower(level) {

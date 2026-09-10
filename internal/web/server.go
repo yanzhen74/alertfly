@@ -37,6 +37,7 @@ type WebServer struct {
 	statusProvider func() []consumer.ConsumerStatus // 消费者状态回调
 	testNotifier   func() error                     // 测试通知回调
 	testSound      func() error                     // 测试声音回调
+	onConfigReload func(old, new *config.Config) string // 配置热重载回调，返回提示信息
 }
 
 // NewWebServer 创建 Web 服务器实例
@@ -184,6 +185,11 @@ func (s *WebServer) SetStatusProvider(fn func() []consumer.ConsumerStatus) {
 func (s *WebServer) SetTestCallbacks(notifierFn, soundFn func() error) {
 	s.testNotifier = notifierFn
 	s.testSound = soundFn
+}
+
+// SetConfigReloadCallback 设置配置热重载回调
+func (s *WebServer) SetConfigReloadCallback(fn func(old, new *config.Config) string) {
+	s.onConfigReload = fn
 }
 
 // Stop 优雅关闭 HTTP 服务器

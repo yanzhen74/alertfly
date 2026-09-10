@@ -113,11 +113,21 @@ func (s *WebServer) handleUpdateConfig(c *gin.Context) {
 	}
 
 	// 更新内存中的配置
+	oldCfg := *s.config
 	*s.config = cfg
+
+	// 触发热重载回调
+	msg := "配置已保存"
+	if s.onConfigReload != nil {
+		hint := s.onConfigReload(&oldCfg, s.config)
+		if hint != "" {
+			msg = hint
+		}
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
-		"msg":  "配置已保存，重启后生效",
+		"msg":  msg,
 	})
 }
 
