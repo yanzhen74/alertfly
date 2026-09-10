@@ -28,6 +28,12 @@ type KafkaConsumer struct {
 	resolvedTopics    []string
 	lastScanTime      time.Time
 	topicScanInterval time.Duration
+
+	// 连接状态跟踪
+	statusMu    sync.Mutex
+	connected   bool
+	lastError   string
+	statusSince time.Time
 }
 
 // consumerGroupHandler 实现 sarama.ConsumerGroupHandler 接口
@@ -94,7 +100,29 @@ func NewKafkaConsumer(cfg *config.KafkaConfig) (*KafkaConsumer, error) {
 		msgs:              msgs,
 		errs:              errs,
 		topicScanInterval: time.Duration(interval) * time.Second,
+		statusSince:       time.Now(),
 	}, nil
+}
+
+// Status 返回当前连接状态
+func (k *KafkaConsumer) Status() ConsumerStatus {
+	k.statusMu.Lock()
+	defer k.statusMu.Unlock()
+	return ConsumerStatus{
+		Name:      "Kafka",
+		Enabled:   true,
+		Connected: k.connected,
+		LastError: k.lastError,
+		Since:     k.statusSince,
+	}
+}
+
+func (k *KafkaConsumer) setStatus(connected bool, errMsg string) {
+	k.statusMu.Lock()
+	defer k.statusMu.Unlock()
+	k.connected = connected
+	k.lastError = errMsg
+	k.statusSince = time.Now()
 }
 
 // getTopics 带缓存的 topic 解析，按配置间隔定期刷新
@@ -296,6 +324,7 @@ func (k *KafkaConsumer) Start(ctx context.Context) error {
 			// 定期扫描 topics（带缓存，按 topicScanInterval 刷新）
 			topics, err := k.getTopics()
 			if err != nil {
+				k.setStatus(false, fmt.Sprintf("resolve topics: %v", err))
 				k.sendError(fmt.Errorf("resolve topics failed: %w", err))
 
 				select {
@@ -322,6 +351,7 @@ func (k *KafkaConsumer) Start(ctx context.Context) error {
 
 			err = k.client.Consume(ctx, topics, k.handler)
 			if err != nil {
+				k.setStatus(false, fmt.Sprintf("consume error: %v", err))
 				k.sendError(err)
 
 				select {
@@ -337,6 +367,7 @@ func (k *KafkaConsumer) Start(ctx context.Context) error {
 			}
 
 			// 消费正常结束后重置退避
+			k.setStatus(true, "")
 			backoff = time.Second
 
 			// 检查上下文是否已取消

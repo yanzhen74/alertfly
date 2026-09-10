@@ -25,6 +25,12 @@ type RedisConsumer struct {
 	mu     sync.Mutex
 	cancel context.CancelFunc
 	closed bool
+
+	// 连接状态跟踪
+	statusMu    sync.Mutex
+	connected   bool
+	lastError   string
+	statusSince time.Time
 }
 
 // NewRedisConsumer 创建 Redis 消费者实例
@@ -43,10 +49,11 @@ func NewRedisConsumer(cfg *config.RedisConfig) (*RedisConsumer, error) {
 	})
 
 	return &RedisConsumer{
-		cfg:   cfg,
-		client: client,
-		msgCh:  make(chan *model.Message, 256),
-		errCh:  make(chan error, 16),
+		cfg:         cfg,
+		client:      client,
+		msgCh:       make(chan *model.Message, 256),
+		errCh:       make(chan error, 16),
+		statusSince: time.Now(),
 	}, nil
 }
 
@@ -97,6 +104,27 @@ func (c *RedisConsumer) Close() error {
 	return c.client.Close()
 }
 
+// Status 返回当前连接状态
+func (c *RedisConsumer) Status() ConsumerStatus {
+	c.statusMu.Lock()
+	defer c.statusMu.Unlock()
+	return ConsumerStatus{
+		Name:      "Redis",
+		Enabled:   true,
+		Connected: c.connected,
+		LastError: c.lastError,
+		Since:     c.statusSince,
+	}
+}
+
+func (c *RedisConsumer) setStatus(connected bool, errMsg string) {
+	c.statusMu.Lock()
+	defer c.statusMu.Unlock()
+	c.connected = connected
+	c.lastError = errMsg
+	c.statusSince = time.Now()
+}
+
 // ---------- PubSub 模式 ----------
 
 // isPattern 判断 channel 是否包含通配符，用于决定使用 PSubscribe 还是 Subscribe
@@ -129,6 +157,7 @@ func (c *RedisConsumer) consumePubSub(ctx context.Context) {
 		}
 		_, err := sub.Receive(ctx)
 		if err != nil {
+			c.setStatus(false, fmt.Sprintf("pubsub subscribe error: %v", err))
 			c.errCh <- fmt.Errorf("pubsub subscribe error: %w", err)
 			sub.Close()
 			backoff = c.reconnectBackoff(backoff, ctx)
@@ -136,6 +165,7 @@ func (c *RedisConsumer) consumePubSub(ctx context.Context) {
 		}
 
 		// 重连成功，重置退避
+		c.setStatus(true, "")
 		backoff = time.Second
 
 		ch := sub.Channel()
@@ -147,6 +177,7 @@ func (c *RedisConsumer) consumePubSub(ctx context.Context) {
 			case msg, ok := <-ch:
 				if !ok {
 					// 通道关闭，需要重连
+					c.setStatus(false, "pubsub channel closed, reconnecting...")
 					c.errCh <- fmt.Errorf("pubsub channel closed, reconnecting...")
 					sub.Close()
 					backoff = c.reconnectBackoff(backoff, ctx)
@@ -167,6 +198,7 @@ func (c *RedisConsumer) consumeStream(ctx context.Context) {
 
 	// 确保消费者组存在
 	if err := c.ensureConsumerGroup(ctx); err != nil {
+		c.setStatus(false, fmt.Sprintf("stream consumer group init error: %v", err))
 		c.errCh <- fmt.Errorf("stream consumer group init error: %w", err)
 	}
 
@@ -194,12 +226,14 @@ func (c *RedisConsumer) consumeStream(ctx context.Context) {
 			if ctx.Err() != nil {
 				return
 			}
+			c.setStatus(false, fmt.Sprintf("stream xreadgroup error: %v", err))
 			c.errCh <- fmt.Errorf("stream xreadgroup error: %w", err)
 			backoff = c.reconnectBackoff(backoff, ctx)
 			continue
 		}
 
 		// 重连成功/读取正常，重置退避
+		c.setStatus(true, "")
 		backoff = time.Second
 
 		for _, stream := range streams {

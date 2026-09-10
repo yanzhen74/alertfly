@@ -52,6 +52,29 @@
     var currentPage = 1;
     var pageSize = 15;
 
+    // --- 连接状态轮询 ---
+    function updateStatus() {
+      fetch('/api/status').then(function (res) { return res.json(); }).then(function (result) {
+        if (result.code !== 0 || !result.data) return;
+        var html = '';
+        var items = result.data;
+        for (var i = 0; i < items.length; i++) {
+          var s = items[i];
+          if (!s.enabled) {
+            html += '<span class="status-item"><span class="status-dot disabled"></span>' + s.name + ' <span style="color:#aaa;">未启用</span></span>';
+          } else if (s.connected) {
+            html += '<span class="status-item"><span class="status-dot connected"></span>' + s.name + '</span>';
+          } else {
+            var errTip = s.last_error ? ' <span class="status-error" title="' + escapeHtml(s.last_error) + '">异常</span>' : '';
+            html += '<span class="status-item"><span class="status-dot disconnected"></span>' + s.name + errTip + '</span>';
+          }
+        }
+        document.getElementById('statusContent').innerHTML = html || '<span style="color:#aaa;">无消费者</span>';
+      }).catch(function () {});
+    }
+    updateStatus();
+    setInterval(updateStatus, 10000); // 每 10 秒刷新状态
+
     // 日期选择器
     laydate.render({ elem: '#startTime', type: 'datetime' });
     laydate.render({ elem: '#endTime', type: 'datetime' });

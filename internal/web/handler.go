@@ -120,15 +120,43 @@ func (s *WebServer) handleUpdateConfig(c *gin.Context) {
 	})
 }
 
-// handleStatus GET /api/status — 获取连接状态（暂时返回固定值）
+// handleStatus GET /api/status — 获取连接状态
 func (s *WebServer) handleStatus(c *gin.Context) {
+	var statuses []gin.H
+
+	if s.statusProvider != nil {
+		for _, st := range s.statusProvider() {
+			statuses = append(statuses, gin.H{
+				"name":       st.Name,
+				"enabled":    st.Enabled,
+				"connected":  st.Connected,
+				"last_error": st.LastError,
+				"since":      st.Since,
+			})
+		}
+	}
+
+	// 补充配置中启用但未在 statusProvider 中的消费者
+	seen := make(map[string]bool)
+	for _, st := range statuses {
+		seen[st["name"].(string)] = true
+	}
+	if !seen["Redis"] {
+		statuses = append(statuses, gin.H{
+			"name": "Redis", "enabled": s.config.Redis.Enabled,
+			"connected": false, "last_error": "未启动",
+		})
+	}
+	if !seen["Kafka"] {
+		statuses = append(statuses, gin.H{
+			"name": "Kafka", "enabled": s.config.Kafka.Enabled,
+			"connected": false, "last_error": "未启动",
+		})
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"code": 0,
-		"data": gin.H{
-			"redis_enabled": s.config.Redis.Enabled,
-			"kafka_enabled": s.config.Kafka.Enabled,
-			"last_error":    "",
-		},
+		"data": statuses,
 	})
 }
 

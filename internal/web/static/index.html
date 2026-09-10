@@ -49,6 +49,20 @@
             max-width: 200px; overflow: hidden; text-overflow: ellipsis;
             white-space: nowrap; display: inline-block; vertical-align: middle;
         }
+        /* 连接状态栏 */
+        .status-bar {
+            background: #fff; border-bottom: 1px solid #e8e8e8;
+            padding: 6px 24px; display: flex; align-items: center; gap: 16px;
+            font-size: 13px; color: #666;
+        }
+        .status-item { display: flex; align-items: center; gap: 4px; }
+        .status-dot {
+            width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+        }
+        .status-dot.connected { background: #5FB878; }
+        .status-dot.disconnected { background: #FF5722; }
+        .status-dot.disabled { background: #ccc; }
+        .status-error { color: #FF5722; font-size: 12px; margin-left: 2px; }
     </style>
 </head>
 <body>
@@ -56,6 +70,12 @@
     <div class="app-header">
         <h2><i class="layui-icon layui-icon-notice" style="margin-right:8px;font-size:20px;"></i>AlertFly 告警历史</h2>
         <a href="/settings.html"><i class="layui-icon layui-icon-set" style="margin-right:4px;"></i>设置</a>
+    </div>
+
+    <!-- 连接状态栏 -->
+    <div class="status-bar" id="statusBar">
+        <span style="color:#999;"><i class="layui-icon layui-icon-link" style="margin-right:4px;"></i>连接状态：</span>
+        <span id="statusContent" style="color:#999;">加载中...</span>
     </div>
 
     <div class="app-container">

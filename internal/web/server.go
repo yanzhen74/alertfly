@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/oliverxu/alertfly/internal/config"
+	"github.com/oliverxu/alertfly/internal/consumer"
 	"github.com/oliverxu/alertfly/internal/storage"
 )
 
@@ -26,13 +27,14 @@ type UpdateCheckResult struct {
 
 // WebServer HTTP Web 服务器，提供前端页面和 REST API
 type WebServer struct {
-	port          int
-	configPath    string
-	storage       storage.Storage
-	config        *config.Config
-	engine        *gin.Engine
-	server        *http.Server
-	onCheckUpdate func() *UpdateCheckResult // 立即检查更新回调
+	port           int
+	configPath     string
+	storage        storage.Storage
+	config         *config.Config
+	engine         *gin.Engine
+	server         *http.Server
+	onCheckUpdate  func() *UpdateCheckResult // 立即检查更新回调
+	statusProvider func() []consumer.ConsumerStatus // 消费者状态回调
 }
 
 // NewWebServer 创建 Web 服务器实例
@@ -167,6 +169,11 @@ func (s *WebServer) handleCheckUpdate(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "已是最新版本，无需更新"})
+}
+
+// SetStatusProvider 设置消费者状态回调，用于 /api/status 接口
+func (s *WebServer) SetStatusProvider(fn func() []consumer.ConsumerStatus) {
+	s.statusProvider = fn
 }
 
 // Stop 优雅关闭 HTTP 服务器

@@ -355,6 +355,15 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 		log.Fatalf("[main] 未启用任何消费者，请启用 Redis 或 Kafka")
 	}
 
+	// --- 设置消费者状态回调 ---
+	ws.SetStatusProvider(func() []consumer.ConsumerStatus {
+		var result []consumer.ConsumerStatus
+		for _, ce := range consumers {
+			result = append(result, ce.Status())
+		}
+		return result
+	})
+
 	// --- 定期清理 goroutine ---
 	go func() {
 		ticker := time.NewTicker(1 * time.Hour)
