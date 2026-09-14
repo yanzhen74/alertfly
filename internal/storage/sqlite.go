@@ -77,6 +77,33 @@ func (s *SQLiteStorage) initSchema() error {
 
 const timeLayout = "2006-01-02 15:04:05"
 
+// legacyTimeLayout 用于解析历史版本以 time.Time.String() 形式写入的字符串
+// 例如："2026-09-10 14:30:14.123456789 +0800 CST"，可能带 " m=+..." 单调时钟后缀
+const legacyTimeLayout = "2006-01-02 15:04:05.999999999 -0700 MST"
+
+// parseStoredTime 兼容解析多种历史 received_at 字符串格式：
+//  1. 当前版本写入："2006-01-02 15:04:05"（本地时间，无时区）
+//  2. 旧版本 time.Time.String()："2006-01-02 15:04:05.999999999 -0700 MST"（可能带 " m=+..." 后缀）
+//
+// 解析失败时返回零值 time.Time{}。
+func parseStoredTime(s string) time.Time {
+	if s == "" {
+		return time.Time{}
+	}
+	if t, err := time.ParseInLocation(timeLayout, s, time.Local); err == nil {
+		return t
+	}
+	// 去掉 time.Now().String() 附带的单调时钟后缀 " m=+..."
+	trimmed := s
+	if idx := strings.Index(trimmed, " m="); idx > 0 {
+		trimmed = trimmed[:idx]
+	}
+	if t, err := time.Parse(legacyTimeLayout, trimmed); err == nil {
+		return t
+	}
+	return time.Time{}
+}
+
 // Save 插入一条消息
 func (s *SQLiteStorage) Save(msg *model.Message) error {
 	_, err := s.db.Exec(
@@ -107,7 +134,13 @@ func (s *SQLiteStorage) Query(filter QueryFilter) ([]*model.Message, int64, erro
 	}
 
 	// 查询数据列表
-	dataSQL := "SELECT id, source, topic, level, subtype, title, mission, sender, content, received_at FROM messages"
+	// 注意：received_at 列声明为 DATETIME，modernc.org/sqlite 驱动读取 SQLITE_TEXT 时
+	// 会自动调用 parseTime 将其转成 time.Time，随后 database/sql 在 scan 到 string
+	// 目标时会以 RFC3339Nano 重新格式化，导致下方 timeLayout 解析失败、
+	// msg.ReceivedAt 保留零值（前端渲染为 1-01-01 08:05:43）。
+	// 用 CAST(received_at AS TEXT) 强制以表达式返回，columnDeclType 变为空，
+	// 驱动跳过 parseTime，scan 到 string 得到原始字符串。
+	dataSQL := "SELECT id, source, topic, level, subtype, title, mission, sender, content, CAST(received_at AS TEXT) FROM messages"
 	if where != "" {
 		dataSQL += " WHERE " + where
 	}
@@ -141,9 +174,7 @@ func (s *SQLiteStorage) Query(filter QueryFilter) ([]*model.Message, int64, erro
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan message: %w", err)
 		}
-		if t, err := time.ParseInLocation(timeLayout, receivedAtStr, time.Local); err == nil {
-			msg.ReceivedAt = t
-		}
+		msg.ReceivedAt = parseStoredTime(receivedAtStr)
 		messages = append(messages, msg)
 	}
 

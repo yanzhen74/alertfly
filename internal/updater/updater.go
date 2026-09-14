@@ -111,6 +111,10 @@ func (u *Updater) Start(ctx context.Context) {
 		// 启动时立即检查一次
 		result := u.CheckAndUpdate()
 		u.handleCheckResult(result)
+		// 定时检查路径：更新成功后立即 restart（后台静默更新，不需要前端响应）
+		if result.Updated {
+			u.Restart()
+		}
 
 		currentInterval := u.cfg.Interval
 		ticker := time.NewTicker(currentInterval)
@@ -124,6 +128,10 @@ func (u *Updater) Start(ctx context.Context) {
 			case <-ticker.C:
 				result := u.CheckAndUpdate()
 				u.handleCheckResult(result)
+				// 定时检查路径：更新成功后立即 restart
+				if result.Updated {
+					u.Restart()
+				}
 
 				// 指数退避：检查是否需要调整间隔
 				newInterval := u.backoffInterval()
@@ -258,8 +266,10 @@ func (u *Updater) CheckAndUpdate() *CheckResult {
 		u.recordEvent(Event{Kind: EventUpdateSuccess, Version: info.Version})
 	}
 
-	// 6. 重启
-	u.restart()
+	// 注意：restart 不再在此处同步调用。
+	// 手动检查更新路径（handleCheckUpdate）需要先让 HTTP 响应 flush 到客户端，
+	// 再延迟触发 restart，避免前端 xhr 收不到响应显示"请求失败"。
+	// 定时检查路径（Start goroutine）由调用方决定是否立即 restart。
 
 	return &CheckResult{HasUpdate: true, NewVersion: info.Version, Updated: true}
 }
@@ -437,7 +447,14 @@ func (u *Updater) replace(tmpPath string) error {
 	return nil
 }
 
-// restart 重启程序
+// Restart 触发进程重启（公开方法，供外部延迟调用）
+// Linux 使用 syscall.Exec 原地替换进程，Windows 使用 StartProcess + os.Exit(0)。
+// 调用前请确保 HTTP 响应已 flush 到客户端，否则前端会显示"请求失败"。
+func (u *Updater) Restart() {
+	u.restart()
+}
+
+// restart 重启程序（内部实现）
 func (u *Updater) restart() {
 	exePath, err := os.Executable()
 	if err != nil {

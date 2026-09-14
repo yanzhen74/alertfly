@@ -267,6 +267,17 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 		if result.Err != nil {
 			errMsg = result.Err.Error()
 		}
+
+		// 如果更新成功，延迟 2 秒触发 restart，让 handler 先返回响应并 flush 到客户端。
+		// 这样前端能看清"版本更新成功"绿字，而不是瞬间被新进程的 openBrowser 覆盖。
+		if result.Updated {
+			go func() {
+				time.Sleep(2 * time.Second)
+				logger.Info("[updater] 延迟重启触发，即将重启至新版本 %s", result.NewVersion)
+				ud.Restart()
+			}()
+		}
+
 		return &web.UpdateCheckResult{
 			HasUpdate:  result.HasUpdate,
 			NewVersion: result.NewVersion,

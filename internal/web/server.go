@@ -173,6 +173,9 @@ func (s *WebServer) handleCheckUpdate(c *gin.Context) {
 	}
 	if result.Updated {
 		c.JSON(http.StatusOK, gin.H{"code": 0, "msg": fmt.Sprintf("版本更新成功 v%s，将在重启后生效", result.NewVersion)})
+		// 强制 flush 响应到客户端，确保前端能收到绿字提示。
+		// 随后 main.go 里的延迟 goroutine 会在 2 秒后触发 restart。
+		c.Writer.Flush()
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"code": 0, "msg": "已是最新版本，无需更新"})
