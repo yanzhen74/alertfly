@@ -38,6 +38,19 @@ type WebServer struct {
 	testNotifier   func() error                     // 测试通知回调
 	testSound      func() error                     // 测试声音回调
 	onConfigReload func(old, new *config.Config) string // 配置热重载回调，返回提示信息
+	ackHandler     AckHandler                          // 告警确认接口（可为 nil）
+}
+
+// AckHandler 告警确认与状态查询接口，由 notifier.Acknowledger 实现。
+type AckHandler interface {
+	// Acknowledge 确认所有未确认告警（停止声音循环 + 清空 pending）
+	Acknowledge()
+	// Active 报告当前是否处于激活态
+	Active() bool
+	// PendingCount 返回待确认告警数量
+	PendingCount() int
+	// Enabled 报告持久化告警功能是否已启用
+	Enabled() bool
 }
 
 // NewWebServer 创建 Web 服务器实例
@@ -121,6 +134,8 @@ func (s *WebServer) registerRoutes() {
 	s.engine.POST("/api/test/sound", s.handleTestSound)
 	s.engine.PUT("/api/log/level", s.handleSetLogLevel)
 	s.engine.GET("/api/log/level", s.handleGetLogLevel)
+	s.engine.POST("/api/alerts/acknowledge", s.handleAcknowledge)
+	s.engine.GET("/api/alerts/state", s.handleAlertState)
 }
 
 // Start 启动 HTTP 服务（非阻塞，内部启动 goroutine）
@@ -195,6 +210,11 @@ func (s *WebServer) SetTestCallbacks(notifierFn, soundFn func() error) {
 // SetConfigReloadCallback 设置配置热重载回调
 func (s *WebServer) SetConfigReloadCallback(fn func(old, new *config.Config) string) {
 	s.onConfigReload = fn
+}
+
+// SetAckHandler 注入告警确认接口，供 /api/alerts/* 路由使用。
+func (s *WebServer) SetAckHandler(h AckHandler) {
+	s.ackHandler = h
 }
 
 // Stop 优雅关闭 HTTP 服务器

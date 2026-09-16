@@ -189,6 +189,23 @@
                                 </div>
                             </div>
                             <div class="layui-form-item">
+                                <label class="layui-form-label">持久化告警级别</label>
+                                <div class="layui-input-block">
+                                    <select name="notifier_persist_level" lay-filter="notifier_persist_level">
+                                        <option value="">禁用</option>
+                                        <option value="warn">warn 及以上</option>
+                                        <option value="error">仅 error</option>
+                                    </select>
+                                    <div style="color:#888;font-size:12px;margin-top:4px;">开启后，达到阈值时声音循环播放，直到从托盘菜单「确认报警」或首页「静音」按钮手动确认</div>
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">循环间隔(秒)</label>
+                                <div class="layui-input-block">
+                                    <input type="number" name="notifier_sound_loop_interval" placeholder="5（默认 5 秒）" autocomplete="off" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
                                 <label class="layui-form-label">功能测试</label>
                                 <div class="layui-input-block">
                                     <button type="button" class="layui-btn layui-btn-sm" id="btnTestNotify"><i class="layui-icon layui-icon-notice"></i> 测试通知</button>

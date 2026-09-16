@@ -230,6 +230,41 @@
 
     // 初始加载
     renderTable(1);
+
+    // --- 静音按钮（告警确认）---
+    var btnMute = document.getElementById('btnMute');
+    var muteCount = document.getElementById('muteCount');
+    function refreshAlertState() {
+      fetch('/api/alerts/state').then(function (res) { return res.json(); }).then(function (r) {
+        if (r.code !== 0) return;
+        if (r.active) {
+          btnMute.classList.add('active');
+          muteCount.textContent = r.count > 0 ? '(' + r.count + ')' : '';
+        } else {
+          btnMute.classList.remove('active');
+          muteCount.textContent = '';
+        }
+      }).catch(function () {});
+    }
+    if (btnMute) {
+      btnMute.onclick = function () {
+        fetch('/api/alerts/acknowledge', { method: 'POST' })
+          .then(function (res) { return res.json(); })
+          .then(function (r) {
+            if (r.code === 0) {
+              layui.use('layer', function () { layui.layer.msg(r.msg || '已确认', { icon: 1 }); });
+            } else {
+              layui.use('layer', function () { layui.layer.msg(r.msg || '确认失败', { icon: 2 }); });
+            }
+            refreshAlertState();
+          })
+          .catch(function () {
+            layui.use('layer', function () { layui.layer.msg('请求失败', { icon: 2 }); });
+          });
+      };
+      refreshAlertState();
+      setInterval(refreshAlertState, 3000); // 3s 轮询告警确认状态
+    }
   }
 
   // ==================== 设置页逻辑 ====================
@@ -301,6 +336,8 @@
           notifier_enabled: (data.notifier && data.notifier.enabled) ? true : false,
           notifier_sound_level: (data.notifier && data.notifier.sound_level) || '',
           notifier_sound_file: (data.notifier && data.notifier.sound_file) || '',
+          notifier_persist_level: (data.notifier && data.notifier.persist_level) || '',
+          notifier_sound_loop_interval: (data.notifier && data.notifier.sound_loop_interval != null) ? String(data.notifier.sound_loop_interval) : '',
           filter_missions: (data.filter && data.filter.missions) ? data.filter.missions.join(',') : '',
           filter_senders: (data.filter && data.filter.senders) ? data.filter.senders.join(',') : '',
           filter_subtypes: (data.filter && data.filter.subtypes) ? data.filter.subtypes.join(',') : '',
@@ -359,7 +396,9 @@
         notifier: {
           enabled: data.notifier_enabled === 'on',
           sound_level: data.notifier_sound_level || '',
-          sound_file: data.notifier_sound_file || ''
+          sound_file: data.notifier_sound_file || '',
+          persist_level: data.notifier_persist_level || '',
+          sound_loop_interval: parseInt(data.notifier_sound_loop_interval) || 0
         },
         filter: {
           missions: data.filter_missions ? data.filter_missions.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [],

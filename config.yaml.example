@@ -42,6 +42,10 @@ notifier:
   enabled: true                 # 是否启用桌面弹窗通知
   sound_level: ""               # 触发声音报警的最低级别：warn / error，空=不发声
   sound_file: ""                # 自定义声音文件路径（WAV 格式），空=使用内嵌声音
+  # 持久化告警：达到阈值后声音循环播放，直到用户从托盘菜单「确认报警」或 Web UI 「静音」手动确认
+  # 适用于防止用户不在屏幕前时错过气泡通知（Win7 气泡无法保持不消失）
+  persist_level: ""             # 触发持久化告警的最低级别：warn / error，空=禁用
+  sound_loop_interval: 5        # 循环声音间隔（秒），默认 5
 
 # 自动更新检查配置
 updater:

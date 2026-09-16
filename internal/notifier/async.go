@@ -18,6 +18,7 @@ import (
 type AsyncNotifier struct {
 	inner      Notifier                      // 内部通知器（linuxNotifier / windowsNotifier / logNotifier）
 	trayNotify func(title, content string)   // 系统托盘通知回调
+	ack        *Acknowledger                 // 未确认告警管理器（可为 nil）
 	ch         chan *model.Message            // 通知消息队列
 	minGap     time.Duration                 // 两次通知最小间隔
 	maxBatch   int                           // 积压超过此数时合并为摘要通知
@@ -56,6 +57,15 @@ func NewAsyncNotifier(inner Notifier, trayNotify func(title, content string), so
 // Start 启动消费 goroutine。传入 appCtx 用于程序退出时自动终止。
 func (a *AsyncNotifier) Start(appCtx context.Context) {
 	go a.processLoop(appCtx)
+}
+
+// SetAcknowledger 注入未确认告警管理器（可选）。
+// 注入后，每条成功发送的通知会同步投递给 Acknowledger，
+// 由其判断是否需要启动声音循环。
+func (a *AsyncNotifier) SetAcknowledger(ack *Acknowledger) {
+	a.mu.Lock()
+	a.ack = ack
+	a.mu.Unlock()
 }
 
 // Notify 非阻塞投递消息到通知队列。
@@ -158,6 +168,7 @@ func (a *AsyncNotifier) processLoop(appCtx context.Context) {
 					a.trayNotify(summary.Title, summary.Content)
 				}
 				a.maybePlaySound(summary.Level)
+				a.forwardAck(summary)
 				logger.Info("[notifier] 合并 %d 条消息为摘要通知（最高级别: %s）",
 					len(batch), summary.Level)
 			} else {
@@ -170,6 +181,7 @@ func (a *AsyncNotifier) processLoop(appCtx context.Context) {
 					a.trayNotify(msg.Title, msg.Content)
 				}
 				a.maybePlaySound(msg.Level)
+				a.forwardAck(msg)
 			}
 
 			lastNotify = time.Now()
@@ -201,6 +213,16 @@ func (a *AsyncNotifier) maybePlaySound(level string) {
 	}
 	if levelPriority(level) >= a.soundLevel {
 		go sound.Play(a.soundFile)
+	}
+}
+
+// forwardAck 将消息转发给 Acknowledger（如已注入），用于判断是否触发持久化告警。
+func (a *AsyncNotifier) forwardAck(msg *model.Message) {
+	a.mu.Lock()
+	ack := a.ack
+	a.mu.Unlock()
+	if ack != nil {
+		ack.OnMessage(msg)
 	}
 }
 

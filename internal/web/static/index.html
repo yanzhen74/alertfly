@@ -63,13 +63,30 @@
         .status-dot.disconnected { background: #FF5722; }
         .status-dot.disabled { background: #ccc; }
         .status-error { color: #FF5722; font-size: 12px; margin-left: 2px; }
+        /* 静音按钮（需确认报警时高亮）*/
+        .header-actions { display: flex; align-items: center; gap: 12px; }
+        #btnMute {
+            background: #FF5722; color: #fff; border: none; border-radius: 2px;
+            padding: 4px 12px; font-size: 13px; cursor: pointer; display: none;
+        }
+        #btnMute:hover { background: #E64A19; }
+        #btnMute.active { display: inline-block; animation: mute-pulse 1.6s ease-in-out infinite; }
+        @keyframes mute-pulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(255, 87, 34, 0.6); }
+            50%       { box-shadow: 0 0 0 6px rgba(255, 87, 34, 0); }
+        }
     </style>
 </head>
 <body>
     <!-- 顶部标题栏 -->
     <div class="app-header">
         <h2><i class="layui-icon layui-icon-notice" style="margin-right:8px;font-size:20px;"></i>AlertFly 告警历史</h2>
-        <a href="/settings.html"><i class="layui-icon layui-icon-set" style="margin-right:4px;"></i>设置</a>
+        <div class="header-actions">
+            <button type="button" id="btnMute" title="停止循环声音并清空未确认告警">
+                <i class="layui-icon layui-icon-mute" style="margin-right:4px;"></i>静音<span id="muteCount"></span>
+            </button>
+            <a href="/settings.html"><i class="layui-icon layui-icon-set" style="margin-right:4px;"></i>设置</a>
+        </div>
     </div>
 
     <!-- 连接状态栏 -->

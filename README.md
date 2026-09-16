@@ -192,6 +192,19 @@ alertfly/
 
 ## 更新日志
 
+### v0.2.7
+
+- **新增**：持久化告警机制，解决 Win7 气泡通知自动消失导致用户错过报警的问题
+  - `notifier.persist_level`：达到阈值（warn/error）时声音循环播放，直到用户手动确认（默认禁用）
+  - `notifier.sound_loop_interval`：循环声音间隔秒数，默认 5
+- **新增**：三个告警确认入口（任一触发即停声 + 清空 pending）：
+  - Windows 托盘右键菜单「确认报警」
+  - Web UI 首页右上角「静音」按钮（需确认时高亮跳动，并显示待确认数量）
+  - REST API `POST /api/alerts/acknowledge` / `GET /api/alerts/state`
+- **新增**：`internal/notifier.Acknowledger` 统一管理未确认告警状态，支持热重载；为后续可选的持久化弹窗预留回调接口
+- **新增**：`internal/sound.StartLoop/StopLoop/Looping` 循环播放能力（幂等、并发安全）
+- **说明**：遵守项目约束「弹窗必须使用系统原生通知机制」，本版本**未**引入自定义弹窗，仅通过声音循环 + 多入口确认保障不丢报警
+
 ### v0.2.6
 
 - **新增**：接收过滤规则增强，支持四种语法（均大小写不敏感）：

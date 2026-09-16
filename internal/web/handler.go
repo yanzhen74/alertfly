@@ -235,3 +235,40 @@ func parseTimeFlex(s string) (time.Time, error) {
 	}
 	return time.ParseInLocation("2006-01-02", s, time.Local)
 }
+
+// handleAcknowledge POST /api/alerts/acknowledge — 确认未处理告警
+// 停止循环声音并清空 pending 列表；未启用持久化告警或无 pending 时仍返回成功。
+func (s *WebServer) handleAcknowledge(c *gin.Context) {
+	if s.ackHandler == nil {
+		c.JSON(http.StatusOK, gin.H{"code": 1, "msg": "告警确认功能未初始化"})
+		return
+	}
+	before := s.ackHandler.PendingCount()
+	s.ackHandler.Acknowledge()
+	logger.Info("[web] 用户通过 Web UI 确认报警（清空 %d 条 pending）", before)
+	c.JSON(http.StatusOK, gin.H{
+		"code":  0,
+		"msg":   fmt.Sprintf("已确认 %d 条告警", before),
+		"count": before,
+	})
+}
+
+// handleAlertState GET /api/alerts/state — 查询告警确认状态
+// 前端轮询该接口以决定是否高亮「静音」按钮。
+func (s *WebServer) handleAlertState(c *gin.Context) {
+	if s.ackHandler == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    0,
+			"enabled": false,
+			"active":  false,
+			"count":   0,
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"code":    0,
+		"enabled": s.ackHandler.Enabled(),
+		"active":  s.ackHandler.Active(),
+		"count":   s.ackHandler.PendingCount(),
+	})
+}

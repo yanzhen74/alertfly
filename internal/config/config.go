@@ -60,6 +60,13 @@ type NotifierConfig struct {
 	Enabled    bool   `yaml:"enabled" json:"enabled"`
 	SoundLevel string `yaml:"sound_level" json:"sound_level"` // 触发声音报警的最低级别：warn / error，空=不发声
 	SoundFile  string `yaml:"sound_file" json:"sound_file"`   // 自定义声音文件路径，空=使用内嵌声音
+
+	// PersistLevel 触发「持久化告警」的最低级别：warn / error，空=禁用。
+	// 持久化告警开启后，声音会循环播放直到用户通过任一确认入口
+	// （托盘菜单「确认报警」/ Web UI「静音」按钮）手动确认。
+	PersistLevel string `yaml:"persist_level" json:"persist_level"`
+	// SoundLoopInterval 循环声音间隔（秒），<=0 时默认 5s。
+	SoundLoopInterval int `yaml:"sound_loop_interval" json:"sound_loop_interval"`
 }
 
 // UpdaterConfig 自动更新配置

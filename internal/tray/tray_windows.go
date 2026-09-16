@@ -13,6 +13,7 @@ import (
 type TrayApp struct {
 	webURL string
 	onQuit func()
+	onAck  func() // 「确认报警」菜单回调（可为 nil）
 }
 
 // NewTrayApp 创建托盘应用实例
@@ -21,6 +22,12 @@ func NewTrayApp(webURL string, onQuit func()) *TrayApp {
 		webURL: webURL,
 		onQuit: onQuit,
 	}
+}
+
+// SetAckCallback 设置「确认报警」菜单项的回调。
+// 需在 Start() 之前调用，否则菜单创建时回调为 nil（点击无反应）。
+func (t *TrayApp) SetAckCallback(fn func()) {
+	t.onAck = fn
 }
 
 // Start 启动系统托盘（阻塞），systray.Run 在 Windows 上要求在主线程调用
@@ -48,6 +55,7 @@ func (t *TrayApp) onReady() {
 
 	mOpenUI := systray.AddMenuItem("打开 Web UI", "在浏览器中打开 AlertFly 面板")
 	mSettings := systray.AddMenuItem("设置", "打开 AlertFly 设置页面")
+	mAck := systray.AddMenuItem("确认报警", "停止循环声音并清空未确认告警")
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("退出", "退出 AlertFly")
 
@@ -58,6 +66,13 @@ func (t *TrayApp) onReady() {
 				openURL(t.webURL)
 			case <-mSettings.ClickedCh:
 				openURL(t.webURL + "/settings.html")
+			case <-mAck.ClickedCh:
+				if t.onAck != nil {
+					log.Println("[tray] 用户通过托盘菜单确认报警")
+					t.onAck()
+				} else {
+					log.Println("[tray] 确认报警回调未注册")
+				}
 			case <-mQuit.ClickedCh:
 				log.Println("[tray] 用户通过托盘菜单选择退出")
 				systray.Quit()

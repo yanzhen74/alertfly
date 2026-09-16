@@ -320,6 +320,23 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 		logger.Info("[main] 声音报警已启用，触发级别: %s", cfg.Notifier.SoundLevel)
 	}
 
+	// --- 初始化未确认告警管理器（持久化告警）---
+	// 达到 PersistLevel 阈值时声音循环播放，直到用户从托盘菜单或 Web UI 确认
+	ack := notifier.NewAcknowledger(notifier.AckConfig{
+		PersistLevel:      cfg.Notifier.PersistLevel,
+		SoundFile:         cfg.Notifier.SoundFile,
+		SoundLoopInterval: time.Duration(cfg.Notifier.SoundLoopInterval) * time.Second,
+	})
+	asyncNt.SetAcknowledger(ack)
+	trayApp.SetAckCallback(ack.Acknowledge)
+	ws.SetAckHandler(ack)
+	if ack.Enabled() {
+		logger.Info("[main] 持久化告警已启用，触发级别: %s，循环间隔: %ds",
+			cfg.Notifier.PersistLevel, cfg.Notifier.SoundLoopInterval)
+	} else {
+		logger.Info("[main] 持久化告警未启用（persist_level 为空）")
+	}
+
 	// --- 设置测试回调 ---
 	ws.SetTestCallbacks(
 		// 测试通知
@@ -355,6 +372,18 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 		if old.Notifier.SoundLevel != new.Notifier.SoundLevel || old.Notifier.SoundFile != new.Notifier.SoundFile {
 			asyncNt.UpdateSound(new.Notifier.SoundLevel, new.Notifier.SoundFile)
 			hotReloaded = append(hotReloaded, "声音报警")
+		}
+
+		// 持久化告警配置：重建 Acknowledger 参数，如禁用且当前在响则立即停声
+		if old.Notifier.PersistLevel != new.Notifier.PersistLevel ||
+			old.Notifier.SoundLoopInterval != new.Notifier.SoundLoopInterval ||
+			old.Notifier.SoundFile != new.Notifier.SoundFile {
+			ack.UpdateConfig(notifier.AckConfig{
+				PersistLevel:      new.Notifier.PersistLevel,
+				SoundFile:         new.Notifier.SoundFile,
+				SoundLoopInterval: time.Duration(new.Notifier.SoundLoopInterval) * time.Second,
+			})
+			hotReloaded = append(hotReloaded, "持久化告警")
 		}
 
 		// 过滤配置：重建 Matcher 并原子替换，下一条消息立即生效
@@ -601,6 +630,8 @@ shutdown:
 	}
 	logger.Info("[main] 正在关闭异步通知...")
 	asyncNt.Close()
+	// 确保循环声音在退出前停止（避免进程退出后声音残留）
+	ack.Acknowledge()
 	logger.Info("[main] 正在关闭存储...")
 	if err := store.Close(); err != nil {
 		logger.Error("[main] 关闭存储失败: %v", err)

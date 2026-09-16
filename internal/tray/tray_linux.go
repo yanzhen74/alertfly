@@ -12,6 +12,7 @@ import (
 type TrayApp struct {
 	webURL string
 	onQuit func()
+	onAck  func() // 保留字段，Linux 无托盘菜单，不会被触发
 }
 
 // NewTrayApp 创建托盘应用实例（Linux 上为空实现）
@@ -20,6 +21,11 @@ func NewTrayApp(webURL string, onQuit func()) *TrayApp {
 		webURL: webURL,
 		onQuit: onQuit,
 	}
+}
+
+// SetAckCallback Linux 无托盘菜单，仅保存回调以保持与 Windows 一致的接口。
+func (t *TrayApp) SetAckCallback(fn func()) {
+	t.onAck = fn
 }
 
 // Start Linux 上不做托盘，直接返回（非阻塞）
