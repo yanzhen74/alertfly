@@ -203,13 +203,13 @@
                             <div class="layui-form-item">
                                 <label class="layui-form-label">Mission（任务名）</label>
                                 <div class="layui-input-block">
-                                    <input type="text" name="filter_missions" placeholder="逗号分隔，如 deploy,backup" autocomplete="off" class="layui-input">
+                                    <input type="text" name="filter_missions" placeholder="逗号分隔，如 deploy,backup 或 regex:deploy-.* 或 !test" autocomplete="off" class="layui-input">
                                 </div>
                             </div>
                             <div class="layui-form-item">
                                 <label class="layui-form-label">Sender（发送者）</label>
                                 <div class="layui-input-block">
-                                    <input type="text" name="filter_senders" placeholder="逗号分隔，如 ops,dev" autocomplete="off" class="layui-input">
+                                    <input type="text" name="filter_senders" placeholder="逗号分隔，如 ops,dev 或 regex:^jenkins.* 或 !bot" autocomplete="off" class="layui-input">
                                 </div>
                             </div>
                             <div class="layui-form-item">
@@ -219,9 +219,31 @@
                                 </div>
                             </div>
                             <div class="layui-form-item">
+                                <label class="layui-form-label">Level（级别）</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="filter_levels" placeholder="逗号分隔，如 warn,error；留空=全部级别" autocomplete="off" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">标题关键字</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="filter_title_keywords" placeholder="子串匹配，如 失败,超时 或 regex:(?i)timeout 或 !测试" autocomplete="off" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
+                                <label class="layui-form-label">内容关键字</label>
+                                <div class="layui-input-block">
+                                    <input type="text" name="filter_content_keywords" placeholder="子串匹配消息 content，语法同标题关键字" autocomplete="off" class="layui-input">
+                                </div>
+                            </div>
+                            <div class="layui-form-item">
                                 <label class="layui-form-label">说明</label>
                                 <div class="layui-input-block" style="padding-top:8px;color:#888;font-size:13px;line-height:1.8;">
-                                    留空表示接收所有，多个值用逗号分隔。<br>不匹配的消息仍会存储到数据库，仅不弹窗通知。<br>系统消息（如版本更新）不受过滤限制，始终弹窗。
+                                    留空表示接收所有，多个规则用逗号分隔，大小写不敏感。<br>
+                                    规则语法：<code>xxx</code>（Mission/Sender/SubType/Level 精确匹配，标题/内容关键字为子串匹配）、
+                                    <code>regex:PATTERN</code>（正则）、<code>!xxx</code>（排除）、<code>!regex:PATTERN</code>（正则排除）。<br>
+                                    组合逻辑：<strong>排除优先</strong>。命中任一排除规则→拒绝；仅有排除规则且都未命中→通过；存在包含规则时至少命中一条才通过。<br>
+                                    不匹配的消息仍会存储到数据库，仅不弹窗通知。系统消息（如版本更新）不受过滤限制，始终弹窗。
                                 </div>
                             </div>
                         </div>

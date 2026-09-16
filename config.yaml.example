@@ -55,10 +55,22 @@ web:
   port: 18080                   # Web UI 监听端口
 
 # 接收过滤配置（控制弹窗通知，不影响消息存储）
+#
+# 每条规则支持以下语法（大小写不敏感）：
+#   xxx              精确匹配（missions/senders/subtypes/levels）或子串匹配（title_keywords/content_keywords）
+#   regex:PATTERN    正则匹配
+#   !xxx             排除规则
+#   !regex:PATTERN   正则排除规则
+#
+# 组合逻辑：排除优先。命中任一排除规则 → 拒绝；仅有排除规则且都未命中 → 通过；
+# 存在包含规则时，至少命中一条才通过。空列表 = 不过滤该维度。
 filter:
-  missions: []                  # 接收的任务名列表，空=全部接收（如 ["deploy", "backup"]）
-  senders: []                   # 接收的发送者列表，空=全部接收（如 ["ops", "dev"]）
-  subtypes: []                  # 接收的子类型列表，空=全部接收（如 ["deploy", "alert"]）
+  missions: []                  # 任务名，如 ["deploy", "backup", "regex:nightly-.*", "!test"]
+  senders: []                   # 发送者，如 ["ops", "dev", "regex:^jenkins.*", "!bot"]
+  subtypes: []                  # 子类型，如 ["deploy", "alert"]
+  levels: []                    # 级别，如 ["warn", "error"]（留空=全部级别）
+  title_keywords: []            # 标题关键字（子串匹配），如 ["失败", "超时", "!测试"]
+  content_keywords: []          # 内容关键字（子串匹配），如 ["disk full", "regex:cpu\\s*>\\s*90"]
 
 # 日志配置
 log:

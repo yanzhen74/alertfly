@@ -71,10 +71,22 @@ type UpdaterConfig struct {
 
 // FilterConfig 接收过滤配置，控制哪些消息弹窗通知
 // 空列表表示不过滤该维度（接收所有），不匹配的消息仍存储但不弹窗
+//
+// 每条规则支持以下语法（大小写不敏感）：
+//   - "xxx"            精确匹配（Missions/Senders/SubTypes/Levels）或子串匹配（TitleKeywords/ContentKeywords）
+//   - "regex:PATTERN"  正则匹配
+//   - "!xxx"           排除规则
+//   - "!regex:PATTERN" 正则排除规则
+//
+// 组合语义：排除优先。命中任一排除规则→拒绝；仅有排除规则且都未命中→通过；
+// 存在包含规则时，至少命中一条才通过。
 type FilterConfig struct {
-	Missions []string `yaml:"missions" json:"missions"` // 接收的任务名列表，空=全部
-	Senders  []string `yaml:"senders" json:"senders"`   // 接收的发送者列表，空=全部
-	SubTypes []string `yaml:"subtypes" json:"subtypes"` // 接收的子类型列表，空=全部
+	Missions        []string `yaml:"missions" json:"missions"`                 // 接收的任务名列表，空=全部
+	Senders         []string `yaml:"senders" json:"senders"`                   // 接收的发送者列表，空=全部
+	SubTypes        []string `yaml:"subtypes" json:"subtypes"`                 // 接收的子类型列表，空=全部
+	Levels          []string `yaml:"levels" json:"levels"`                     // 接收的级别列表（如 info/warn/error），空=全部
+	TitleKeywords   []string `yaml:"title_keywords" json:"title_keywords"`     // 标题关键字（子串/正则），空=不过滤
+	ContentKeywords []string `yaml:"content_keywords" json:"content_keywords"` // 内容关键字（子串/正则），空=不过滤
 }
 
 // LogConfig 日志配置

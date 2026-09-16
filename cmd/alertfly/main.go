@@ -10,11 +10,13 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/oliverxu/alertfly/internal/config"
 	"github.com/oliverxu/alertfly/internal/consumer"
+	"github.com/oliverxu/alertfly/internal/filter"
 	"github.com/oliverxu/alertfly/internal/logger"
 	"github.com/oliverxu/alertfly/internal/model"
 	"github.com/oliverxu/alertfly/internal/notifier"
@@ -28,6 +30,10 @@ import (
 
 // version 由 build.sh 通过 ldflags 注入
 var version = "dev"
+
+// filterMatcher 保存当前的过滤匹配器（*filter.Matcher）。
+// 使用 atomic.Value 实现热重载时无锁替换，主循环每次读取最新值。
+var filterMatcher atomic.Value
 
 func main() {
 	// --- 命令行参数解析 ---
@@ -92,6 +98,9 @@ func main() {
 	if !cfg.Redis.Enabled && !cfg.Kafka.Enabled {
 		cfg.Redis.Enabled = true
 	}
+
+	// --- 初始化过滤匹配器（后续热重载时重建）---
+	filterMatcher.Store(filter.NewMatcher(&cfg.Filter))
 
 	// Web 配置默认值
 	if cfg.Web.Port == 0 {
@@ -348,10 +357,14 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 			hotReloaded = append(hotReloaded, "声音报警")
 		}
 
-		// 过滤配置：主循环每次迭代读取 cfg.Filter，自动生效
+		// 过滤配置：重建 Matcher 并原子替换，下一条消息立即生效
 		if !stringSliceEqual(old.Filter.Missions, new.Filter.Missions) ||
 			!stringSliceEqual(old.Filter.Senders, new.Filter.Senders) ||
-			!stringSliceEqual(old.Filter.SubTypes, new.Filter.SubTypes) {
+			!stringSliceEqual(old.Filter.SubTypes, new.Filter.SubTypes) ||
+			!stringSliceEqual(old.Filter.Levels, new.Filter.Levels) ||
+			!stringSliceEqual(old.Filter.TitleKeywords, new.Filter.TitleKeywords) ||
+			!stringSliceEqual(old.Filter.ContentKeywords, new.Filter.ContentKeywords) {
+			filterMatcher.Store(filter.NewMatcher(&new.Filter))
 			hotReloaded = append(hotReloaded, "接收过滤")
 		}
 
@@ -541,7 +554,7 @@ func runApp(ctx context.Context, cancel context.CancelFunc,
 			}
 
 			// 根据过滤条件决定是否弹窗通知
-			if shouldNotify(msg, &cfg.Filter) {
+			if shouldNotify(msg) {
 				if err := nt.Notify(msg); err != nil {
 					logger.Error("[main] 发送通知失败: %v", err)
 				}
@@ -619,47 +632,15 @@ func truncate(s string, maxRunes int) string {
 }
 
 // shouldNotify 判断消息是否应该弹窗通知
+// 具体规则由 internal/filter.Matcher 实现，支持精确/子串/正则匹配与排除前缀
 // source 为 "system" 的消息始终弹窗，不受过滤限制
-// 空 filter 列表表示不过滤该维度（接收所有）
-// 非空列表时，消息对应字段必须在列表中（大小写不敏感）才弹窗
-func shouldNotify(msg *model.Message, filter *config.FilterConfig) bool {
-	// source 为 "system" 的消息（如版本更新事件）始终弹窗，不受过滤限制
-	if strings.EqualFold(msg.Source, "system") {
+func shouldNotify(msg *model.Message) bool {
+	m, ok := filterMatcher.Load().(*filter.Matcher)
+	if !ok || m == nil {
+		// 匹配器未初始化（理论上不会发生），保守起见放行
 		return true
 	}
-
-	// Missions 过滤
-	if len(filter.Missions) > 0 {
-		if !matchList(msg.Mission, filter.Missions) {
-			return false
-		}
-	}
-
-	// Senders 过滤
-	if len(filter.Senders) > 0 {
-		if !matchList(msg.Sender, filter.Senders) {
-			return false
-		}
-	}
-
-	// SubTypes 过滤
-	if len(filter.SubTypes) > 0 {
-		if !matchList(msg.SubType, filter.SubTypes) {
-			return false
-		}
-	}
-
-	return true
-}
-
-// matchList 检查 value 是否在 list 中（大小写不敏感）
-func matchList(value string, list []string) bool {
-	for _, item := range list {
-		if strings.EqualFold(value, item) {
-			return true
-		}
-	}
-	return false
+	return m.ShouldNotify(msg)
 }
 
 // stringSliceEqual 比较两个字符串切片是否相等

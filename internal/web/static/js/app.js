@@ -304,6 +304,9 @@
           filter_missions: (data.filter && data.filter.missions) ? data.filter.missions.join(',') : '',
           filter_senders: (data.filter && data.filter.senders) ? data.filter.senders.join(',') : '',
           filter_subtypes: (data.filter && data.filter.subtypes) ? data.filter.subtypes.join(',') : '',
+          filter_levels: (data.filter && data.filter.levels) ? data.filter.levels.join(',') : '',
+          filter_title_keywords: (data.filter && data.filter.title_keywords) ? data.filter.title_keywords.join(',') : '',
+          filter_content_keywords: (data.filter && data.filter.content_keywords) ? data.filter.content_keywords.join(',') : '',
           updater_enabled: (data.updater && data.updater.enabled) ? true : false,
           updater_check_url: (data.updater && data.updater.check_url) || '',
           updater_interval: (data.updater && data.updater.interval != null) ? String(Math.round(data.updater.interval / 60000000000)) : ''
@@ -361,7 +364,10 @@
         filter: {
           missions: data.filter_missions ? data.filter_missions.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [],
           senders: data.filter_senders ? data.filter_senders.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [],
-          subtypes: data.filter_subtypes ? data.filter_subtypes.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : []
+          subtypes: data.filter_subtypes ? data.filter_subtypes.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [],
+          levels: data.filter_levels ? data.filter_levels.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [],
+          title_keywords: data.filter_title_keywords ? data.filter_title_keywords.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [],
+          content_keywords: data.filter_content_keywords ? data.filter_content_keywords.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : []
         },
         updater: {
           enabled: data.updater_enabled === 'on',

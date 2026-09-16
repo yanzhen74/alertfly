@@ -192,6 +192,18 @@ alertfly/
 
 ## 更新日志
 
+### v0.2.6
+
+- **新增**：接收过滤规则增强，支持四种语法（均大小写不敏感）：
+  - `xxx`：Mission/Sender/SubType/Level 精确匹配；标题/内容关键字为子串匹配
+  - `regex:PATTERN`：正则匹配
+  - `!xxx`：排除规则
+  - `!regex:PATTERN`：正则排除规则
+- **新增**：过滤维度扩展——增加 `filter.levels`、`filter.title_keywords`、`filter.content_keywords` 三个字段
+- **改进**：过滤组合逻辑改为「排除优先」：命中任一排除规则即拒绝；仅有排除规则且都未命中则通过；存在包含规则时至少命中一条才通过
+- **改进**：过滤匹配器（正则）预编译并通过 `atomic.Value` 无锁替换，配置热重载下一条消息即生效
+- **说明**：不匹配的消息仍会存储，仅不弹窗；`source=system` 的消息不受过滤限制
+
 ### v0.2.5
 
 - **新增**：Redis PSUBSCRIBE 模式匹配订阅（channel 含通配符时自动切换，从 channel 名称自动提取元数据）
