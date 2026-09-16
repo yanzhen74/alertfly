@@ -39,3 +39,8 @@ vendor/
 
 # Windows Zone.Identifier 文件
 *:Zone.Identifier
+
+# Python 缓存
+__pycache__/
+*.pyc
+*.pyo

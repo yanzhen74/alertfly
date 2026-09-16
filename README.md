@@ -83,7 +83,9 @@ scripts\send_alert.bat "服务异常" "API超时"
 
 ## 二次开发
 
-通过 Proxy 适配器可对接自有业务系统的消息格式，详见 [doc/DEVELOP.md](doc/DEVELOP.md)。
+通过 Proxy 适配器可对接自有业务系统的消息格式，详见 [doc/development.md](doc/development.md)。
+
+外部系统向 AlertFly 发送报警的对接方式（HTTP Webhook / Redis / Kafka）详见 [doc/integration-guide.md](doc/integration-guide.md)。
 
 ## 自更新配置
 
@@ -176,9 +178,12 @@ alertfly/
 ├── scripts/                   -- 工具脚本（mock测试、手动发送等）
 ├── update-server/             -- 自更新服务端
 ├── doc/                       -- 文档
-│   ├── BUILD.md               -- 编译指南
-│   ├── DEVELOP.md             -- 二开说明
-│   └── require.md             -- 需求文档
+│   ├── README.md              -- 文档索引
+│   ├── integration-guide.md   -- 报警对接指南（HTTP Webhook / Redis / Kafka）
+│   ├── jenkins-template.md    -- Jenkins 集成模板
+│   ├── development.md         -- 二次开发指南（Proxy 适配器）
+│   ├── build.md               -- 编译与部署
+│   └── archive/               -- 历史归档文档
 ├── build.sh                   -- 一键编译脚本
 ├── config.yaml.example        -- 配置示例
 ├── go.mod
