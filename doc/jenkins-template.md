@@ -29,7 +29,8 @@ sudo yum install -y redis
 ```bash
 #!/bin/sh
 # alertfly-send.sh —— 向 AlertFly 发送 Jenkins 构建通知
-# 用法: alertfly-send.sh <level> [title] [content]
+# 用法: alertfly-send.sh <level> [title] [content] [log_lines]
+#   log_lines: 附加的构建日志行数，默认 5，也可用环境变量 ALERTFLY_LOG_LINES 指定
 #
 # 使用 POSIX sh 兼容语法，避免 Jenkins 用 dash 执行时报错
 set -eu
@@ -37,21 +38,69 @@ set -eu
 LEVEL="${1:-error}"
 TITLE="${2:-${JOB_NAME} #${BUILD_NUMBER}}"
 CONTENT="${3:-URL: ${BUILD_URL}}"
+LOG_LINES="${4:-${ALERTFLY_LOG_LINES:-5}}"
 
 REDIS_HOST="${ALERTFLY_REDIS_HOST:-192.168.1.100}"
+
+# 取日志最后 N 行，并截掉 "Performing Post build task..." 标记行及其之后的
+# post-build 自身输出，保证只展示真实构建步骤的日志
+# 依赖入参：$LOG_SRC（日志文件路径）、$N（行数）
+tail_n_before_marker() {
+    # 标记行之前（不含标记行）的所有行；正则用 [Pp] 做大小写兼容，gawk/mawk 均可运行
+    # tr 清洗控制字符（保留 \t 和 ESC）：ANSI 颜色码的 ESC 由 esc() 转义为 \u001b，
+    # 其余裸控制字符（如 \x07）会导致 JSON 非法，必须删除
+    LINES=$(awk '/[Pp]ost build task/{exit} {print}' "$LOG_SRC" | tr -d '\000-\010\013\014\016-\032\034-\037\177')
+    if [ -n "$LINES" ]; then
+        printf '%s\n' "$LINES" | tail -n "$N"
+    else
+        # 日志中找不到标记行（或标记行在首行）时，降级取文件末尾 N 行
+        tail -n "$N" "$LOG_SRC" | tr -d '\000-\010\013\014\016-\032\034-\037\177'
+    fi
+}
+
+# 附加构建日志（标记行之前的最后 N 行）到 content
+# 优先读本地 log 文件，其次通过 HTTP 拉取 consoleText
+LOG_TAIL=""
+if [ -n "${JENKINS_HOME:-}" ] && [ -n "${JOB_NAME:-}" ] && [ -n "${BUILD_NUMBER:-}" ]; then
+    # JOB_NAME 含 '/'（文件夹 Job）时，日志路径中 '/' 要替换为 '/jobs/'
+    JOB_PATH=$(printf '%s' "$JOB_NAME" | sed 's|/|/jobs/|g')
+    LOG_FILE="${JENKINS_HOME}/jobs/${JOB_PATH}/builds/${BUILD_NUMBER}/log"
+    if [ -r "$LOG_FILE" ]; then
+        LOG_SRC="$LOG_FILE"
+        N="$LOG_LINES"
+        LOG_TAIL=$(tail_n_before_marker)
+    fi
+fi
+if [ -z "$LOG_TAIL" ] && [ -n "${BUILD_URL:-}" ] && command -v curl >/dev/null 2>&1; then
+    CONSOLE_FILE="${TMPDIR:-/tmp}/alertfly-console-$$"
+    if curl -s --max-time 5 "${BUILD_URL}consoleText" > "$CONSOLE_FILE" && [ -s "$CONSOLE_FILE" ]; then
+        LOG_SRC="$CONSOLE_FILE"
+        N="$LOG_LINES"
+        LOG_TAIL=$(tail_n_before_marker)
+    fi
+    rm -f "$CONSOLE_FILE"
+fi
+if [ -n "$LOG_TAIL" ]; then
+    CONTENT="${CONTENT}
+--- 构建日志(最后${LOG_LINES}行) ---
+${LOG_TAIL}"
+fi
 REDIS_PORT="${ALERTFLY_REDIS_PORT:-6379}"
 MISSION="${ALERTFLY_MISSION:-build}"
 SUBTYPE="${ALERTFLY_SUBTYPE:-build}"
 
 # JSON 转义：处理 \ " 换行 回车 Tab（用 awk 实现，POSIX 兼容）
+# 日志中的 { } 等字符在 JSON 字符串内无需转义，原样保留不会破坏结构；
+# 日志的 ANSI 控制字符已在 tail_n_before_marker 中清洗
 esc() {
     printf '%s' "$1" | awk '
-        BEGIN { ORS="" }
+        BEGIN { ORS=""; esc = sprintf("%c", 27) }
         {
             gsub(/\\/, "\\\\")
             gsub(/"/, "\\\"")
             gsub(/\t/, "\\t")
             gsub(/\r/, "\\r")
+            gsub(esc, "\\u001b")
             if (NR > 1) print "\\n"
             print
         }
@@ -89,7 +138,7 @@ sudo chmod +x /var/lib/jenkins/alertfly-send.sh
 | 字段 | 填写值 |
 |---|---|
 | **Log text** | `marked build as failure` |
-| **Script** | `bash /var/lib/jenkins/alertfly-send.sh error "${JOB_NAME} #${BUILD_NUMBER} 构建失败" "URL: ${BUILD_URL}"` |
+| **Script** | `bash /var/lib/jenkins/alertfly-send.sh error "${JOB_NAME} #${BUILD_NUMBER} 构建失败" "URL: ${BUILD_URL}" 5` |
 | **Run script only if all previous steps were successful** | ❌ **不勾** |
 | **Escalate script execution status to job** | ❌ **不勾** |
 
@@ -98,7 +147,7 @@ sudo chmod +x /var/lib/jenkins/alertfly-send.sh
 **字段说明：**
 
 - **Log text**：正则表达式。Jenkins 在 build step 失败时会自动打印一行 `Build step 'Execute shell' marked build as failure`，只要 console 日志中出现该文本，Script 就会执行。
-- **Script**：构建失败时要跑的 shell 命令。这里调用 §1.3 的发送脚本，传入 `level=error`、自定义 title 和 content。
+- **Script**：构建失败时要跑的 shell 命令。这里调用 §1.3 的发送脚本，传入 `level=error`、自定义 title、content 和日志行数（最后一个参数 `5`，可省略，也可用环境变量 `ALERTFLY_LOG_LINES` 指定）。脚本会自动在 content 末尾追加 **`Performing Post build task...` 标记行之前的最后 N 行构建日志**（不含 post-build 自身输出）：优先读 `${JENKINS_HOME}/jobs/<JOB_NAME>/builds/<BUILD_NUMBER>/log`（适用于 Jenkins master 与构建节点为同一台机器的情况），读不到则降级用 `curl ${BUILD_URL}consoleText` 拉取；两者都失败或日志中找不到标记行时，降级为直接取文件末尾 N 行 / content 只保留 URL，不影响报警发送。
 - **Run only if all previous steps were successful**：**不要勾**。勾了就变成"只在成功时执行"，与需求相反。
 - **Escalate script execution status to job**：**不要勾**。勾了会导致 Redis 短暂不可达时把 job 结果升级为 FAILURE，污染构建状态。
 
